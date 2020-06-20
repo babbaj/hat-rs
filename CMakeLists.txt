@@ -18,4 +18,4 @@ set(CMAKE_CXX_FLAGS  "${CMAKE_CXX_FLAGS} -g -fpermissive")
 
 message("${VMREAD_SRC}")
 
-add_executable(rust_hack main.cpp pointer.h ${VMREAD_SRC})
+add_executable(rust_hack main.cpp pointer.h csutils.h ${VMREAD_SRC})

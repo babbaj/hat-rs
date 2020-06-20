@@ -3,6 +3,7 @@
 #include <cstdio>
 #include <cassert>
 #include "il2cpp.h"
+#include "csutils.h"
 
 
 void printModules(WinProcess& process) {
@@ -96,15 +97,21 @@ int num_entites(WinProcess& proc) {
         }
         auto obj = obj_ptr.read(proc);
 
-        const intptr_t cachedPtr = obj.Object_m_CachedPtr;
-        if (!cachedPtr) continue;
 
-        auto asObject = pointer<rust::Il2CppObject>{(uint64_t)cachedPtr};
 
-        std::string name = getClassName(proc, obj_ptr.address);
-        std::cout << "Name = " << name << '\n';
     }
     return objectList.count;
+}
+
+pointer<rust::BasePlayer_o> getLocalPlayer(WinProcess& proc) {
+    WinDll* ga = proc.modules.GetModuleInfo("GameAssembly.dll");
+    assert(ga);
+
+    auto localPlayerClass = pointer<rust::LocalPlayer_c>{scan_for_class(proc, *ga, "LocalPlayer")};
+    auto staticFields = pointer<pointer<rust::LocalPlayer_StaticFields>>{&localPlayerClass.as_raw()->static_fields}
+        .read(proc);
+
+    return staticFields.read(proc)._Entity_k__BackingField;
 }
 
 int main() {
@@ -121,7 +128,15 @@ int main() {
         auto* rust = findRust(ctx.processList);
         if (rust) {
             std::cout << "found rust\n";
-            std::cout << num_entites(*rust) << '\n';
+            //std::cout << num_entites(*rust) << '\n';
+            auto local = getLocalPlayer(*rust);
+            if (local) {
+                auto namePtr = readMember(*rust, local, &rust::BasePlayer_o::_displayName);
+                std::u16string name = readString(*rust, namePtr);
+                std::cout << "Local player name = " << u16To8(name) << '\n';
+                float health = readMember(*rust, local, &rust::BasePlayer_o::BaseCombatEntity__health);
+                std::cout << "health = " << health << '\n';
+            }
         } else {
             std::cout << "couldn't find rust\n";
         }

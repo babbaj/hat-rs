@@ -23,8 +23,13 @@ struct pointer_base {
     T* as_raw() {
         return reinterpret_cast<T*>(address);
     }
+
+    explicit operator bool() const {
+        return address != 0;
+    }
 };
 
+// TODO: add function to get pointer to member
 template<typename T>
 struct pointer : pointer_base<T> {
     using pointer_base<T>::pointer_base;

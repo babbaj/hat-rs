@@ -1,11 +1,12 @@
 #include <iostream>
-#include "vmread/hlapi/hlapi.h"
 #include <cstdio>
 #include <cassert>
+
+#include "vmread/hlapi/hlapi.h"
 #include "il2cpp.h"
 #include "csutils.h"
-#include "native.h"
-
+#include "wrappers.h"
+#include "radar.h"
 
 void printModules(WinProcess& process) {
     PEB peb = process.GetPeb();
@@ -77,7 +78,7 @@ std::string getClassName(WinProcess& proc, uint64_t address) {
     return name;
 }
 
-int num_players(WinProcess& proc) {
+std::vector<player> getVisiblePlayers(WinProcess& proc) {
     WinDll* ga = proc.modules.GetModuleInfo("GameAssembly.dll");
     assert(ga);
 
@@ -87,18 +88,23 @@ int num_players(WinProcess& proc) {
         .visiblePlayerList.read(proc) // BasePlayer_StaticFields
         .vals.read(proc); // ListDictionary_ulong__BasePlayer__o
 
-    auto array = pointer<pointer<rust::BaseNetworkable_o>>{(uintptr_t)&playerList.buffer.as_raw()->m_Items[0]};
+    auto array = pointer<pointer<rust::BasePlayer_o>>{(uintptr_t)&playerList.buffer.as_raw()->m_Items[0]};
     const auto obj_count = playerList.count;
+    std::vector<player> out; out.reserve(obj_count);
     for (int i = 0; i < obj_count; i++) {
-        pointer<rust::BaseNetworkable_o> obj_ptr = array.read(proc, i);
+        pointer<rust::BasePlayer_o> obj_ptr = array.read(proc, i);
         if (!obj_ptr.address) {
             puts("!obj");
             continue;
         }
         auto obj = obj_ptr.read(proc);
+        if (obj.playerFlags & (int)player_flags::Sleeping) {
+            continue;
+        }
 
+        out.emplace_back(proc, obj);
     }
-    return playerList.count;
+    return out;
 }
 
 pointer<rust::BasePlayer_o> getLocalPlayer(WinProcess& proc) {
@@ -112,20 +118,12 @@ pointer<rust::BasePlayer_o> getLocalPlayer(WinProcess& proc) {
     return staticFields.read(proc)._Entity_k__BackingField;
 }
 
-Vector3 getPosition(WinProcess& proc, pointer<rust::BasePlayer_o> player) {
-    // https://www.unknowncheats.me/forum/2562206-post1402.html
-    // https://github.com/Dualisc/MalkovaEXTERNAL/blob/master/main.cc#L1079
-    const uint64_t ptr = readMember(proc, player, &rust::BasePlayer_o::Object_m_CachedPtr);
-    auto localPlayer  = proc.Read<uint64_t>(ptr + 0x30);
-    auto localOC = proc.Read<uint64_t>(localPlayer  + 0x30);
-    auto localT = proc.Read<uint64_t>(localOC + 0x8);
-    auto localVS  = proc.Read<uint64_t>(localT + 0x38);
 
-    return proc.Read<Vector3>(localVS  + 0x90);
-}
 
 
 int main() {
+    runRadar(); return 0;
+
     pid_t pid;
     FILE* pipe = popen("pidof qemu-system-x86_64", "r");
     fscanf(pipe, "%d", &pid);
@@ -149,8 +147,8 @@ int main() {
                 std::cout << "health = " << health << '\n';
                 auto [x, y, z] = getPosition(*rust, local);
                 std::cout << "Position = " << x << ", " << y << ", " << z << '\n';
-                auto numPlayers = num_players(*rust);
-                std::cout << numPlayers << " players\n";
+                auto players = getVisiblePlayers(*rust);
+                std::cout << players.size() << " players\n";
             }
         } else {
             std::cout << "couldn't find rust\n";

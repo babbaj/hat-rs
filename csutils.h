@@ -12,7 +12,6 @@ std::string u16To8(const std::u16string& str) {
     return convert.to_bytes(str.c_str());
 }
 
-// haven't tested this yet
 std::u16string readString(WinProcess& proc, pointer<rust::System_String_o> string) {
     const auto length = string.read(proc).m_stringLength;
     const auto chars = pointer<uint16_t>{&string.as_raw()->m_firstChar};
@@ -22,3 +21,8 @@ std::u16string readString(WinProcess& proc, pointer<rust::System_String_o> strin
     proc.Read(chars.address, out.data(), length * sizeof(uint16_t));
     return out;
 }
+
+std::string readString8(WinProcess& proc, pointer<rust::System_String_o> string) {
+    return u16To8(readString(proc, string));
+}
+

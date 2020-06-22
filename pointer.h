@@ -45,6 +45,7 @@ struct pointer : pointer_base<T> {
     }
 };
 
+
 template<typename T, size_t N>
 struct pointer<T[N]> : pointer_base<T[N]> {
     using pointer_base<T[N]>::pointer_base;

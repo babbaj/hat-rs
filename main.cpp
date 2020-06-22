@@ -4,6 +4,7 @@
 #include <cassert>
 #include "il2cpp.h"
 #include "csutils.h"
+#include "native.h"
 
 
 void printModules(WinProcess& process) {
@@ -76,19 +77,18 @@ std::string getClassName(WinProcess& proc, uint64_t address) {
     return name;
 }
 
-int num_entites(WinProcess& proc) {
+int num_players(WinProcess& proc) {
     WinDll* ga = proc.modules.GetModuleInfo("GameAssembly.dll");
     assert(ga);
 
-    rust::BufferList_TVal__o objectList = pointer<rust::BaseNetworkable_c>{scan_for_class(proc, *ga, "BaseNetworkable")}
+    rust::BufferList_TVal__o playerList = pointer<rust::BasePlayer_c>{scan_for_class(proc, *ga, "BasePlayer")}
         .read(proc)
         .static_fields.read(proc)
-        .clientEntities.read(proc) // BaseNetworkable_StaticFields
-        .entityList.read(proc) // BaseNetworkable_EntityRealm_o
-        .vals.read(proc); // ListDictionary_uint__BaseNetworkable__o
+        .visiblePlayerList.read(proc) // BasePlayer_StaticFields
+        .vals.read(proc); // ListDictionary_ulong__BasePlayer__o
 
-    auto array = pointer<pointer<rust::BaseNetworkable_o>>{(uintptr_t)&objectList.buffer.as_raw()->m_Items[0]};
-    const auto obj_count = objectList.count;
+    auto array = pointer<pointer<rust::BaseNetworkable_o>>{(uintptr_t)&playerList.buffer.as_raw()->m_Items[0]};
+    const auto obj_count = playerList.count;
     for (int i = 0; i < obj_count; i++) {
         pointer<rust::BaseNetworkable_o> obj_ptr = array.read(proc, i);
         if (!obj_ptr.address) {
@@ -97,10 +97,8 @@ int num_entites(WinProcess& proc) {
         }
         auto obj = obj_ptr.read(proc);
 
-
-
     }
-    return objectList.count;
+    return playerList.count;
 }
 
 pointer<rust::BasePlayer_o> getLocalPlayer(WinProcess& proc) {
@@ -113,6 +111,19 @@ pointer<rust::BasePlayer_o> getLocalPlayer(WinProcess& proc) {
 
     return staticFields.read(proc)._Entity_k__BackingField;
 }
+
+Vector3 getPosition(WinProcess& proc, pointer<rust::BasePlayer_o> player) {
+    // https://www.unknowncheats.me/forum/2562206-post1402.html
+    // https://github.com/Dualisc/MalkovaEXTERNAL/blob/master/main.cc#L1079
+    const uint64_t ptr = readMember(proc, player, &rust::BasePlayer_o::Object_m_CachedPtr);
+    auto localPlayer  = proc.Read<uint64_t>(ptr + 0x30);
+    auto localOC = proc.Read<uint64_t>(localPlayer  + 0x30);
+    auto localT = proc.Read<uint64_t>(localOC + 0x8);
+    auto localVS  = proc.Read<uint64_t>(localT + 0x38);
+
+    return proc.Read<Vector3>(localVS  + 0x90);
+}
+
 
 int main() {
     pid_t pid;
@@ -132,10 +143,14 @@ int main() {
             auto local = getLocalPlayer(*rust);
             if (local) {
                 auto namePtr = readMember(*rust, local, &rust::BasePlayer_o::_displayName);
-                std::u16string name = readString(*rust, namePtr);
-                std::cout << "Local player name = " << u16To8(name) << '\n';
+                std::string name = readString8(*rust, namePtr);
+                std::cout << "Local player name = " << name << '\n';
                 float health = readMember(*rust, local, &rust::BasePlayer_o::BaseCombatEntity__health);
                 std::cout << "health = " << health << '\n';
+                auto [x, y, z] = getPosition(*rust, local);
+                std::cout << "Position = " << x << ", " << y << ", " << z << '\n';
+                auto numPlayers = num_players(*rust);
+                std::cout << numPlayers << " players\n";
             }
         } else {
             std::cout << "couldn't find rust\n";

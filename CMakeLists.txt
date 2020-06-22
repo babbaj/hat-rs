@@ -14,8 +14,8 @@ set(VMREAD_SRC
 
 add_definitions(-DLMODE=MODE_EXTERNAL)
 
-set(CMAKE_CXX_FLAGS  "${CMAKE_CXX_FLAGS} -g -fpermissive")
+set(CMAKE_CXX_FLAGS  "${CMAKE_CXX_FLAGS} -g")
 
 message("${VMREAD_SRC}")
 
-add_executable(rust_hack main.cpp pointer.h csutils.h ${VMREAD_SRC})
+add_executable(rust_hack main.cpp pointer.h csutils.h native.h ${VMREAD_SRC})

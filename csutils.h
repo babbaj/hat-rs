@@ -4,12 +4,14 @@
 #include "il2cpp.h"
 
 #include <string>
-#include <codecvt>
-#include <locale>
+#include <algorithm>
 
 inline std::string u16To8(const std::u16string& str) {
-    std::wstring_convert<std::codecvt_utf8<char16_t>, char16_t> convert;
-    return convert.to_bytes(str.c_str());
+    std::string out; out.resize(str.size());
+    std::transform(str.begin(), str.end(), out.begin(), [](uint16_t c) {
+       return c <= 255 ? c : '?';
+    });
+    return out;
 }
 
 inline std::u16string readString(WinProcess& proc, pointer<rust::System_String_o> string) {

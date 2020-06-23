@@ -11,19 +11,24 @@ void centerOrigin(sf::CircleShape& circle) {
     circle.setOrigin( circle.getRadius(), circle.getRadius());
 }
 
-void drawPlayer(sf::RenderWindow& window, const sf::Vector2f& pos) {
+void drawPlayer(sf::RenderWindow& window, const sf::Vector2f& pos, float yaw) {
     sf::CircleShape playerCircle(10);
     centerOrigin(playerCircle);
     playerCircle.setPosition(pos.x, pos.y);
     playerCircle.setFillColor({0, 0, 255});
 
+    const auto wCenter = center(window);
+    sf::Vertex line[2];
+    line[0].position = wCenter; line[0].color = {0, 255, 0};
+    line[1].position = wCenter; line[1].color = {0, 255, 0};
+    line[1].position.y -= 15;
+    sf::Transform lineRotate;
+    lineRotate.rotate(yaw, wCenter);
+    line[1].position = lineRotate.transformPoint(line[1].position);
+
+
     window.draw(playerCircle);
-}
-
-
-
-sf::Vector2f mult(const sf::Vector2f& vec, float operand) {
-    return {vec.x * operand, vec.y * operand};
+    window.draw(line, 2, sf::PrimitiveType::LineStrip);
 }
 
 
@@ -39,24 +44,25 @@ void runRadar(WinProcess& rust) {
 
         constexpr float SCALE = 4.5; // 4.5 pixels per meter
 
-        const auto [centerX, centerY] = center(window);
-        drawPlayer(window, center(window));
-
         const player local = player{rust, getLocalPlayer(rust)};
         const std::vector players = getVisiblePlayers(rust);
-        const float yaw = local.angles.x;
+
+        const float yaw = local.angles.y;
+        drawPlayer(window, center(window), yaw);
 
         for (const auto& player : players) {
             if (player.handle.address == local.handle.address) continue;
             const auto me = sf::Vector2f{local.position.x, local.position.z};
             const auto them = sf::Vector2f{player.position.x, player.position.z};
 
-            const auto relativeRadarPos = (me - them) * SCALE;
-            sf::CircleShape enemyCircle(4.5);
+            auto relativeRadarPos = (them - me) * SCALE;
+            relativeRadarPos.y *= -1;
 
-            enemyCircle.setFillColor({255, 0, 0});
+            sf::CircleShape enemyCircle(4.5);
+            centerOrigin(enemyCircle);
             enemyCircle.setPosition(center(window) + relativeRadarPos);
-            // TODO: rotate
+            enemyCircle.setFillColor({255, 0, 0});
+
             window.draw(enemyCircle);
         }
 

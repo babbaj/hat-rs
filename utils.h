@@ -104,7 +104,7 @@ inline std::vector<player> getVisiblePlayers(WinProcess& proc) {
             continue;
         }
 
-        out.emplace_back(proc, obj);
+        out.emplace_back(proc, obj_ptr, obj);
     }
     return out;
 }

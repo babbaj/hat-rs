@@ -41,7 +41,7 @@ struct pointer : pointer_base<T> {
 
     void write(WinProcess& proc, const T& value, size_t idx = 0) {
         assert(this->address);
-        proc.Write(this->address + (idx * sizeof(T), value));
+        proc.Write(this->address + (idx * sizeof(T)), value);
     }
 };
 
@@ -70,6 +70,11 @@ struct pointer<void> : pointer_base<void> {
 template<typename T, typename M>
 M readMember(WinProcess& proc, const pointer<T> ptr, M T::* member) {
     return proc.Read<M>(ptr.address + offset_of(member));
+}
+
+template<typename T, typename M>
+void writeMember(WinProcess& proc, const pointer<T> ptr, M T::* member, const M& value) {
+    proc.Write(ptr.address + offset_of(member), value);
 }
 
 static_assert(sizeof(pointer<void>) == sizeof(void*));

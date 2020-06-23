@@ -1,5 +1,5 @@
 #pragma once
 
-#include "SDL.h"
+#include "vmread/hlapi/hlapi.h"
 
-void runRadar();
+void runRadar(WinProcess& rust);

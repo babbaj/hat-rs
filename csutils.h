@@ -7,12 +7,12 @@
 #include <codecvt>
 #include <locale>
 
-std::string u16To8(const std::u16string& str) {
+inline std::string u16To8(const std::u16string& str) {
     std::wstring_convert<std::codecvt_utf8<char16_t>, char16_t> convert;
     return convert.to_bytes(str.c_str());
 }
 
-std::u16string readString(WinProcess& proc, pointer<rust::System_String_o> string) {
+inline std::u16string readString(WinProcess& proc, pointer<rust::System_String_o> string) {
     const auto length = string.read(proc).m_stringLength;
     const auto chars = pointer<uint16_t>{&string.as_raw()->m_firstChar};
 
@@ -22,7 +22,7 @@ std::u16string readString(WinProcess& proc, pointer<rust::System_String_o> strin
     return out;
 }
 
-std::string readString8(WinProcess& proc, pointer<rust::System_String_o> string) {
+inline std::string readString8(WinProcess& proc, pointer<rust::System_String_o> string) {
     return u16To8(readString(proc, string));
 }
 

@@ -1,129 +1,52 @@
 #include <iostream>
 #include <cstdio>
-#include <cassert>
+#include <thread>
+#include <chrono>
+#include <tuple>
 
-#include "vmread/hlapi/hlapi.h"
-#include "il2cpp.h"
-#include "csutils.h"
-#include "wrappers.h"
 #include "radar.h"
+#include "utils.h"
 
-void printModules(WinProcess& process) {
-    PEB peb = process.GetPeb();
-    short magic = process.Read<short>(peb.ImageBaseAddress);
-    printf("\tBase:\t%lx\tMagic:\t%hx (valid: %hhx)\n", peb.ImageBaseAddress, magic, (char)(magic == IMAGE_DOS_SIGNATURE));
 
-    printf("\tExports:\n");
-    for (auto& o : process.modules) {
-        printf("\t%.8lx\t%.8lx\t%lx\t%s\n", o.info.baseAddress, o.info.entryPoint, o.info.sizeOfModule, o.info.name);
-        if (!strcmp("friendsui.DLL", o.info.name)) {
-            for (auto& u : o.exports)
-                printf("\t\t%lx\t%s\n", u.address, u.name);
+/*void setNoRecoil(WinProcess& proc, pointer<rust::Item_o> item) {
+    pointer ref = readMember(proc, item, &rust::Item_o::heldEntity).ent_cached;
+    if (!ref) return;
+
+    pointer cast = pointer<rust::BaseProjectile_o>{ref.address};
+    pointer recoilProperties = readMember(proc, cast, &rust::BaseProjectile_o::recoil);
+    if (!recoilProperties) return;
+
+
+    rust::RecoilProperties_o recoil = recoilProperties.read(proc);
+    recoil.recoilYawMin   = 0.f;
+    recoil.recoilYawMax   = 0.f;
+    recoil.recoilPitchMin = 0.f;
+    recoil.recoilPitchMax = 0.f;
+    recoilProperties.write(proc, recoil);
+}
+
+void noRecoil(WinProcess& proc, pointer<rust::BasePlayer_o> player) {
+    auto activeId = readMember(proc, player, &rust::BasePlayer_o::clActiveItem);
+    if (!activeId) return;
+
+    pointer inv = readMember(proc, player, &rust::BasePlayer_o::inventory);
+    pointer belt = readMember(proc, inv, &rust::PlayerInventory_o::containerBelt);
+    auto itemList = readMember(proc, belt, &rust::ItemContainer_o::itemList).read(proc);
+    pointer Item_array = pointer<rust::Item_array>{itemList._items.address}; // dumper mistakenly used protobuf
+    pointer array = pointer<pointer<rust::Item_o>>{&Item_array.as_raw()->m_Items[0]};
+
+    for (int i = 0; i < itemList._size; i++) {
+        pointer item = array.read(proc, i);
+        uint32_t uId = readMember(proc, item, &rust::Item_o::uid);
+        if (activeId == uId) {
+            setNoRecoil(proc, item);
         }
     }
-}
-
-WinProcess* findRust(WinProcessList& list) {
-    return list.FindProcNoCase("rustclient.exe");
-}
-
-// apparently hat has the same thing
-uint64_t scan_for_class(WinProcess& proc, WinDll& gameAssembly, const char* name)
-{
-    uint64_t base = gameAssembly.info.baseAddress;
-    auto dos_header = proc.Read<IMAGE_DOS_HEADER>(base);
-    auto data_header = proc.Read<IMAGE_SECTION_HEADER>(base + dos_header.e_lfanew + sizeof(IMAGE_NT_HEADERS64) + (3 * 40));
-    auto next_section = proc.Read<IMAGE_SECTION_HEADER>(base + dos_header.e_lfanew + sizeof(IMAGE_NT_HEADERS64) + (4 * 40));
-    auto data_size = next_section.VirtualAddress - data_header.VirtualAddress;
-
-    if (strcmp((char*)data_header.Name, ".data")) {
-        printf("[!] Section order changed\n");
-    }
-
-    for (uint64_t offset = data_size; offset > 0; offset -= 8) {
-        char klass_name[0x100] = { 0 };
-        auto klass = proc.Read<uint64_t>(base + data_header.VirtualAddress + offset);
-        if (klass == 0) { continue; }
-        auto name_pointer = proc.Read<uint64_t>(klass + 0x10);
-        if (name_pointer == 0) { continue; }
-        proc.Read(name_pointer, klass_name, sizeof(klass_name));
-        if (!strcmp(klass_name, name)) {
-            //printf("[*] 0x%x -> %s\n", data_header.VirtualAddress + offset, name);
-            return klass;
-        }
-    }
-
-    printf("[!] Unable to find %s in scan\n", name);
-    exit(1);
-}
-
-uint64_t getModuleBase(WinProcess& proc, const char* name) {
-    auto* module = proc.modules.GetModuleInfo(name);
-    assert(module);
-    return module->info.baseAddress;
-}
-
-// TODO: allow reading any size string
-std::string readCString(WinProcess& proc, pointer<const char> str) {
-    char buffer[256]{};
-    proc.Read(str.address, buffer, sizeof(buffer));
-    return std::string{buffer};
-}
-
-std::string getClassName(WinProcess& proc, uint64_t address) {
-    auto asObject = pointer<rust::Il2CppObject>{address};
-
-    pointer<const char> className = asObject.read(proc).klass.read(proc)._1.name;
-    std::string name = readCString(proc, className);
-    return name;
-}
-
-std::vector<player> getVisiblePlayers(WinProcess& proc) {
-    WinDll* ga = proc.modules.GetModuleInfo("GameAssembly.dll");
-    assert(ga);
-
-    rust::BufferList_TVal__o playerList = pointer<rust::BasePlayer_c>{scan_for_class(proc, *ga, "BasePlayer")}
-        .read(proc)
-        .static_fields.read(proc)
-        .visiblePlayerList.read(proc) // BasePlayer_StaticFields
-        .vals.read(proc); // ListDictionary_ulong__BasePlayer__o
-
-    auto array = pointer<pointer<rust::BasePlayer_o>>{(uintptr_t)&playerList.buffer.as_raw()->m_Items[0]};
-    const auto obj_count = playerList.count;
-    std::vector<player> out; out.reserve(obj_count);
-    for (int i = 0; i < obj_count; i++) {
-        pointer<rust::BasePlayer_o> obj_ptr = array.read(proc, i);
-        if (!obj_ptr.address) {
-            puts("!obj");
-            continue;
-        }
-        auto obj = obj_ptr.read(proc);
-        if (obj.playerFlags & (int)player_flags::Sleeping) {
-            continue;
-        }
-
-        out.emplace_back(proc, obj);
-    }
-    return out;
-}
-
-pointer<rust::BasePlayer_o> getLocalPlayer(WinProcess& proc) {
-    WinDll* ga = proc.modules.GetModuleInfo("GameAssembly.dll");
-    assert(ga);
-
-    auto localPlayerClass = pointer<rust::LocalPlayer_c>{scan_for_class(proc, *ga, "LocalPlayer")};
-    auto staticFields = pointer<pointer<rust::LocalPlayer_StaticFields>>{&localPlayerClass.as_raw()->static_fields}
-        .read(proc);
-
-    return staticFields.read(proc)._Entity_k__BackingField;
-}
-
-
+}*/
 
 
 int main() {
-    runRadar(); return 0;
-
+    std::cout << "sizeof (BasePlayer_o) = " << sizeof(rust::BasePlayer_o) << '\n';
     pid_t pid;
     FILE* pipe = popen("pidof qemu-system-x86_64", "r");
     fscanf(pipe, "%d", &pid);
@@ -137,7 +60,7 @@ int main() {
         auto* rust = findRust(ctx.processList);
         if (rust) {
             std::cout << "found rust\n";
-            //std::cout << num_entites(*rust) << '\n';
+
             auto local = getLocalPlayer(*rust);
             if (local) {
                 auto namePtr = readMember(*rust, local, &rust::BasePlayer_o::_displayName);
@@ -149,6 +72,8 @@ int main() {
                 std::cout << "Position = " << x << ", " << y << ", " << z << '\n';
                 auto players = getVisiblePlayers(*rust);
                 std::cout << players.size() << " players\n";
+
+                runRadar(*rust);
             }
         } else {
             std::cout << "couldn't find rust\n";

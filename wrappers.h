@@ -5,6 +5,8 @@
 #include "vmread/hlapi/hlapi.h"
 #include "il2cpp.h"
 #include "csutils.h"
+#include "utils.h"
+#include "pointer.h"
 
 enum class player_flags: int32_t {
     Unused1 = 1,
@@ -34,7 +36,11 @@ struct vector3 {
     float x, y, z;
 };
 
-vector3 getPosition(WinProcess& proc, uint64_t m_cachedPtr) {
+struct vector2 {
+    float x, y;
+};
+
+inline vector3 getPosition(WinProcess& proc, uint64_t m_cachedPtr) {
     // https://www.unknowncheats.me/forum/2562206-post1402.html
     // https://github.com/Dualisc/MalkovaEXTERNAL/blob/master/main.cc#L1079
     auto localPlayer  = proc.Read<uint64_t>(m_cachedPtr + 0x30);
@@ -45,21 +51,27 @@ vector3 getPosition(WinProcess& proc, uint64_t m_cachedPtr) {
     return proc.Read<vector3>(localVS  + 0x90);
 }
 
-vector3 getPosition(WinProcess& proc, pointer<rust::BasePlayer_o> player) {
+inline vector3 getPosition(WinProcess& proc, pointer<rust::BasePlayer_o> player) {
     const uint64_t ptr = readMember(proc, player, &rust::BasePlayer_o::Object_m_CachedPtr);
     return getPosition(proc, ptr);
 }
 
 struct player {
+    pointer<rust::BasePlayer_o> handle;
     std::string name;
     float health;
     vector3 position;
+    vector2 angles;
 
-    explicit player(WinProcess& proc, const rust::BasePlayer_o& player) {
+    explicit player(WinProcess& proc, pointer<rust::BasePlayer_o> handle_, const rust::BasePlayer_o& player) {
+        this->handle = handle_;
         this->name = readString8(proc, player._displayName);
         this->health = player.BaseCombatEntity__health;
         this->position = getPosition(proc, player.Object_m_CachedPtr);
+
+        auto vec3 = readMember(proc, player.input, &rust::PlayerInput_o::bodyAngles);
+        this->angles = vector2{vec3.x, vec3.y};
     }
 
-    explicit player(WinProcess& proc, pointer<rust::BasePlayer_o> pPtr): player(proc, pPtr.read(proc)) { }
+    explicit player(WinProcess& proc, pointer<rust::BasePlayer_o> pPtr): player(proc, pPtr, pPtr.read(proc)) { }
 };

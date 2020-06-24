@@ -14,6 +14,8 @@ inline constexpr std::ptrdiff_t offset_of(T Owner::*member) {
 
 template<typename T>
 struct pointer_base {
+    using type = T;
+
     uint64_t address{};
 
     explicit pointer_base(T* ptr): address(reinterpret_cast<uintptr_t>(ptr)) {}
@@ -34,14 +36,24 @@ template<typename T>
 struct pointer : pointer_base<T> {
     using pointer_base<T>::pointer_base;
 
-    T read(WinProcess& proc, size_t idx = 0) {
-        assert(this->address);
+    [[nodiscard]] pointer<T> index(size_t idx) const {
+        return pointer<T>{this->address + (idx * sizeof(T))};
+    }
+
+    T read(WinProcess& proc, size_t idx = 0) const {
+        //assert(this->address);
+        nullCheck();
         return proc.Read<T>(this->address + (idx * sizeof(T)));
     }
 
     void write(WinProcess& proc, const T& value, size_t idx = 0) {
         assert(this->address);
+        nullCheck();
         proc.Write(this->address + (idx * sizeof(T)), value);
+    }
+private:
+    void nullCheck() const {
+        if (!this->address) throw "null pointer!";
     }
 };
 

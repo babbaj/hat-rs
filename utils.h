@@ -96,11 +96,11 @@ inline std::vector<player> getVisiblePlayers(WinProcess& proc) {
     for (int i = 0; i < obj_count; i++) {
         pointer<rust::BasePlayer_o> obj_ptr = array.read(proc, i);
         if (!obj_ptr.address) {
-            puts("!obj");
+            //puts("!obj");
             continue;
         }
         auto obj = obj_ptr.read(proc);
-        if (obj.playerFlags & (int)player_flags::Sleeping) {
+        if (obj.playerFlags & (int32_t)player_flags::Sleeping) {
             continue;
         }
 
@@ -110,7 +110,7 @@ inline std::vector<player> getVisiblePlayers(WinProcess& proc) {
 }
 
 inline pointer<rust::BasePlayer_o> getLocalPlayer(WinProcess& proc) {
-    WinDll* ga = proc.modules.GetModuleInfo("GameAssembly.dll");
+    static WinDll* const ga = proc.modules.GetModuleInfo("GameAssembly.dll");
     assert(ga);
 
     static auto localPlayerClass = pointer<rust::LocalPlayer_c>{scan_for_class(proc, *ga, "LocalPlayer")};
@@ -125,4 +125,16 @@ inline std::pair<float, float> getAngles(WinProcess& proc, pointer<rust::BasePla
     // not sure if that's actually the roll
     auto [yaw, pitch, roll] = readMember(proc, input, &rust::PlayerInput_o::bodyAngles);
     return {yaw, pitch};
+}
+
+template<typename List>
+inline auto getListData(WinProcess& proc, pointer<List> list) {
+    using T = typename std::decay_t<decltype(std::declval<List>()._items.read(proc).m_Items[0])>::type;
+
+    List l = list.read(proc);
+    const auto size = l._size;
+    pointer itemsPtr = l._items;
+    auto arrayPtr = pointer<pointer<T>>{(uint64_t)&itemsPtr.as_raw()->m_Items[0]};
+
+    return std::pair<int32_t, pointer<pointer<T>>>{size, arrayPtr};
 }

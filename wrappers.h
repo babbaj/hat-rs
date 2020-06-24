@@ -62,6 +62,11 @@ struct player {
     float health;
     vector3 position;
     vector2 angles;
+    uint32_t flags; // playerFlags
+
+    [[nodiscard]] bool isSleeping() const {
+        return (this->flags & (int32_t)player_flags::Sleeping) != 0;
+    }
 
     explicit player(WinProcess& proc, pointer<rust::BasePlayer_o> handle_, const rust::BasePlayer_o& player) {
         this->handle = handle_;
@@ -71,6 +76,7 @@ struct player {
 
         auto vec3 = readMember(proc, player.input, &rust::PlayerInput_o::bodyAngles);
         this->angles = vector2{vec3.x, vec3.y};
+        this->flags = player.playerFlags;
     }
 
     explicit player(WinProcess& proc, pointer<rust::BasePlayer_o> pPtr): player(proc, pPtr, pPtr.read(proc)) { }

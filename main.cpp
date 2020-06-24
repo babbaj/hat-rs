@@ -44,6 +44,43 @@ void noRecoil(WinProcess& proc, pointer<rust::BasePlayer_o> player) {
     }
 }*/
 
+pointer<rust::PlayerWalkMovement_o> getPlayerMovement(WinProcess& proc, pointer<rust::BasePlayer_o> player) {
+    return pointer<rust::PlayerWalkMovement_o>{readMember(proc, player, &rust::BasePlayer_o::movement).address};
+}
+
+// default = 2.5
+pointer<float> getGravityPtr(WinProcess& proc, pointer<rust::BasePlayer_o> player) {
+    pointer movement = getPlayerMovement(proc, player);
+    return pointer<float>{&movement.as_raw()->gravityMultiplier};
+}
+
+void doSpider(WinProcess& proc, pointer<rust::BasePlayer_o> player) {
+    pointer movement = getPlayerMovement(proc, player);
+    writeMember(proc, movement, &rust::PlayerWalkMovement_o::groundAngle, 0.f);
+    writeMember(proc, movement, &rust::PlayerWalkMovement_o::groundAngleNew, 0.f);
+}
+
+void fullbright(WinProcess& proc) {
+    static WinDll* const ga = proc.modules.GetModuleInfo("GameAssembly.dll");
+    assert(ga);
+    static pointer tod_sky_clazz = pointer<rust::TOD_Sky_c>{scan_for_class(proc, *ga, "TOD_Sky")};
+
+    auto fields = readMember(proc, tod_sky_clazz, &rust::TOD_Sky_c::static_fields);
+    pointer list = fields.read(proc).instances;
+    auto [size, ptrArray] = getListData(proc, list);
+
+    for (int i = 0; i < size; i++) {
+        pointer<rust::TOD_Sky_o> sky = ptrArray.index(i).read(proc);
+        writeMember(proc, sky, &rust::TOD_Sky_o::_IsDay_k__BackingField, true);
+
+        pointer cycleParams = readMember(proc, sky, &rust::TOD_Sky_o::Cycle);
+        writeMember(proc, cycleParams, &rust::TOD_CycleParameters_o::Hour, 12.f);
+    }
+}
+
+void waterSpeed(WinProcess& proc, pointer<rust::BasePlayer_o> player) {
+    writeMember(proc, player, &rust::BasePlayer_o::clothingWaterSpeedBonus, 1.f);
+}
 
 int main() {
     std::cout << "sizeof (BasePlayer_o) = " << sizeof(rust::BasePlayer_o) << '\n';
@@ -73,7 +110,19 @@ int main() {
                 auto players = getVisiblePlayers(*rust);
                 std::cout << players.size() << " players\n";
 
-                runRadar(*rust);
+                //auto grav = getGravityPtr(*rust, local);
+                //grav.write(*rust, 1.5);
+
+                std::thread radarThread([&] { runRadar(*rust); });
+                while (true) {
+                    using namespace std::literals::chrono_literals;
+
+                    doSpider(*rust, local);
+                    fullbright(*rust);
+
+                    std::this_thread::sleep_for(1ms);
+                }
+                radarThread.join();
             }
         } else {
             std::cout << "couldn't find rust\n";

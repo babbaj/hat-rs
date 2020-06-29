@@ -23,7 +23,7 @@ void drawSelf(sf::RenderWindow& window, const sf::Vector2f& pos, float yaw) {
     sf::Vertex line[2];
     line[0].position = wCenter; line[0].color = {0, 0, 0};
     line[1].position = wCenter; line[1].color = {0, 0, 0};
-    line[1].position.y -= 15;
+    line[1].position.y -= 150;
     sf::Transform lineRotate;
     lineRotate.rotate(yaw, wCenter);
     line[1].position = lineRotate.transformPoint(line[1].position);

@@ -4,6 +4,7 @@
 #include <cstdint>
 #include <cassert>
 #include <type_traits>
+#include <exception>
 
 template<typename T, typename Owner>
 inline constexpr std::ptrdiff_t offset_of(T Owner::*member) {
@@ -11,6 +12,12 @@ inline constexpr std::ptrdiff_t offset_of(T Owner::*member) {
     auto* obj = reinterpret_cast<const Owner*>(storage);
     return intptr_t(&(obj->*member)) - intptr_t(obj);
 }
+
+template<typename T, typename Owner>
+constexpr T member_type_fn(T Owner::*);
+
+template<typename M>
+using member_type = decltype(member_type_fn(std::declval<M>()));
 
 template<typename T>
 struct pointer_base {
@@ -47,13 +54,37 @@ struct pointer : pointer_base<T> {
     }
 
     void write(WinProcess& proc, const T& value, size_t idx = 0) {
-        assert(this->address);
+        //assert(this->address);
         nullCheck();
         proc.Write(this->address + (idx * sizeof(T)), value);
     }
+
+    template<typename U>
+    pointer<U> cast() {
+        static_assert(sizeof(U) >= sizeof(T));
+        static_assert(alignof(U) >= alignof(T));
+        return pointer<U>{this->address};
+    }
+
+    template<typename U>
+    bool operator==(pointer<U> rhs) {
+        return this->address == rhs.address;
+    }
+
+    template<typename U>
+    bool operator!=(pointer<U> rhs) {
+        return !(*this == rhs);
+    }
+
+    template<typename Fn>
+    auto memberImpl(Fn f) {
+        auto mem = f(*this);
+        return pointer<member_type<decltype(mem)>>{this->address + offset_of(mem)};
+    }
+
 private:
     void nullCheck() const {
-        if (!this->address) throw "null pointer!";
+        if (!this->address) throw std::runtime_error{"null pointer!"};
     }
 };
 
@@ -89,5 +120,13 @@ void writeMember(WinProcess& proc, const pointer<T> ptr, M T::* member, const M&
     proc.Write(ptr.address + offset_of(member), value);
 }
 
+template<typename T, typename M>
+[[deprecated]] pointer<M> member0(pointer<T> ptr, M T::* member) {
+    return pointer<M>{ptr.address + offset_of(member)};
+}
+
 static_assert(sizeof(pointer<void>) == sizeof(void*));
 static_assert(sizeof(pointer<int>) == sizeof(int*));
+
+
+#define member(m) memberImpl([](auto ptr) { return &decltype(ptr)::type::m; })

@@ -10,7 +10,7 @@ set(VMREAD_SRC
         vmread/pmparser.c
         vmread/hlapi/windll.cpp
         vmread/hlapi/winprocess.cpp
-        vmread/hlapi/winprocesslist.cpp wrappers.h radar.h radar.cpp utils.h utils.cpp)
+        vmread/hlapi/winprocesslist.cpp wrappers.h radar.h radar.cpp utils.h)
 
 add_definitions(-DLMODE=MODE_EXTERNAL)
 
@@ -22,7 +22,7 @@ find_package (SFML REQUIRED system window graphics network audio)
 
 include_directories(${SFML_INCLUDE_DIR})
 
-add_executable(rust_hack main.cpp pointer.h csutils.h wrappers.h radar.h radar.cpp utils.h utils.cpp ${VMREAD_SRC})
+add_executable(rust_hack main.cpp pointer.hpp csutils.h wrappers.h radar.h radar.cpp utils.h ${VMREAD_SRC})
 
 target_link_libraries(rust_hack ${SFML_LIBRARIES} ${SFML_DEPENDENCIES})
 

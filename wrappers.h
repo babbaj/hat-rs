@@ -6,7 +6,7 @@
 #include "il2cpp.h"
 #include "csutils.h"
 #include "utils.h"
-#include "pointer.h"
+#include "pointer.hpp"
 
 enum class player_flags: int32_t {
     Unused1 = 1,
@@ -73,7 +73,7 @@ inline vector3 getPosition(WinProcess& proc, uint64_t m_cachedPtr) {
 }
 
 inline vector3 getPosition(WinProcess& proc, pointer<rust::BasePlayer_o> player) {
-    const uint64_t ptr = readMember(proc, player, &rust::BasePlayer_o::Object_m_CachedPtr);
+    const uint64_t ptr = player.member(m_CachedPtr).read(proc);
     return getPosition(proc, ptr);
 }
 
@@ -92,10 +92,10 @@ struct player {
     explicit player(WinProcess& proc, pointer<rust::BasePlayer_o> handle_, const rust::BasePlayer_o& player) {
         this->handle = handle_;
         this->name = readString8(proc, player._displayName);
-        this->health = player.BaseCombatEntity__health;
-        this->position = getPosition(proc, player.Object_m_CachedPtr);
+        this->health = player._health;
+        this->position = getPosition(proc, player.m_CachedPtr);
 
-        auto vec3 = readMember(proc, player.input, &rust::PlayerInput_o::bodyAngles);
+        auto vec3 = player.input.member(bodyAngles).read(proc);
         this->angles = vector2{vec3.x, vec3.y};
         this->flags = player.playerFlags;
     }

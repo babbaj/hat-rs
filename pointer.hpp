@@ -76,8 +76,16 @@ struct pointer : pointer_base<T> {
         return !(*this == rhs);
     }
 
+    // kenzie wouldn't like this :-)
+    constexpr bool operator==(std::nullptr_t) {
+        return this->address == 0;
+    }
+    constexpr bool operator!=(std::nullptr_t) {
+        return this->address != 0;
+    }
+
     template<typename Fn>
-    auto memberImpl(Fn f) {
+    auto memberImpl(Fn f) const {
         auto mem = f(*this);
         return pointer<member_type<decltype(mem)>>{this->address + offset_of(mem)};
     }
@@ -105,18 +113,30 @@ struct pointer<T[N]> : pointer_base<T[N]> {
     }
 };
 
+template<typename R, typename... Args>
+struct pointer<R(Args...)> : pointer_base<R(Args...)> {
+    using pointer_base<R(Args...)>::pointer_base;
+};
+
+// TODO: use concepts instead of specializing every combo of const
 template<>
 struct pointer<void> : pointer_base<void> {
     using pointer_base<void>::pointer_base;
 };
+template<>
+struct pointer<const void> : pointer_base<const void> {
+    using pointer_base<const void>::pointer_base;
+};
 
-template<typename T, typename M>
-M readMember(WinProcess& proc, const pointer<T> ptr, M T::* member) {
+template<typename T, typename S = T, typename M>
+[[deprecated]] M readMember(WinProcess& proc, const pointer<T> ptr, M S::* member) {
+    static_assert(std::is_base_of_v<S, T>);
     return proc.Read<M>(ptr.address + offset_of(member));
 }
 
-template<typename T, typename M>
-void writeMember(WinProcess& proc, const pointer<T> ptr, M T::* member, const M& value) {
+template<typename T, typename S = T, typename M>
+[[deprecated]] void writeMember(WinProcess& proc, const pointer<T> ptr, M S::* member, const M& value) {
+    static_assert(std::is_base_of_v<S, T>);
     proc.Write(ptr.address + offset_of(member), value);
 }
 

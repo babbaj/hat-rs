@@ -5,7 +5,6 @@
 #include <cassert>
 
 #include "vmread/hlapi/hlapi.h"
-#include "il2cpp.h"
 #include "csutils.h"
 #include "wrappers.h"
 
@@ -28,20 +27,11 @@ inline WinProcess* findRust(WinProcessList& list) {
     return list.FindProcNoCase("rustclient.exe");
 }
 
-// apparently hat has the same thing
-uint64_t scan_for_class0(WinProcess& proc, WinDll& gameAssembly, const char* name);
-
-template<typename T>
-inline pointer<T> scan_for_class(WinProcess& proc, WinDll& gameAssembly, const char* name) {
-    return pointer<T>{scan_for_class0(proc, gameAssembly, name)};
-}
-
-template<typename T>
-inline pointer<T> get_class(WinProcess& proc, const char* name) {
+template<typename C>
+inline pointer<C> get_class(WinProcess& proc) {
     static WinDll* const ga = proc.modules.GetModuleInfo("GameAssembly.dll");
     assert(ga);
-    static const pointer<T> clazz = scan_for_class<T>(proc, *ga, name);
-    return clazz;
+    return pointer<C>{ga->info.baseAddress + C::offset};
 }
 
 inline uint64_t getModuleBase(WinProcess& proc, const char* name) {
@@ -69,7 +59,7 @@ inline std::vector<player> getVisiblePlayers(WinProcess& proc) {
     WinDll* ga = proc.modules.GetModuleInfo("GameAssembly.dll");
     assert(ga);
 
-    static auto clazz = pointer<rust::BasePlayer_c>{scan_for_class0(proc, *ga, "BasePlayer")};
+    static auto clazz = get_class<rust::BasePlayer_c>(proc);
     rust::BufferList_TVal__o playerList = clazz
             .read(proc)
             .static_fields.read(proc)
@@ -96,20 +86,19 @@ inline std::vector<player> getVisiblePlayers(WinProcess& proc) {
 }
 
 inline pointer<rust::BasePlayer_o> getLocalPlayer(WinProcess& proc) {
-    static WinDll* const ga = proc.modules.GetModuleInfo("GameAssembly.dll");
-    assert(ga);
-
-    static auto localPlayerClass = pointer<rust::LocalPlayer_c>{scan_for_class0(proc, *ga, "LocalPlayer")};
-    auto staticFields = pointer<pointer<rust::LocalPlayer_StaticFields>>{&localPlayerClass.as_raw()->static_fields}
+    static auto localPlayerClass = get_class<rust::LocalPlayer_c>(proc);
+    //auto name = getClassName(proc, localPlayerClass.address);
+    //std::cout << "local player class = " << name << '\n';
+    auto staticFields = localPlayerClass.member(static_fields)//pointer<pointer<rust::LocalPlayer_StaticFields>>{&localPlayerClass.as_raw()->static_fields}
             .read(proc);
 
     return staticFields.read(proc)._Entity_k__BackingField;
 }
 
 inline std::pair<float, float> getAngles(WinProcess& proc, pointer<rust::BasePlayer_o> player) {
-    pointer input = readMember(proc, player, &rust::BasePlayer_o::input);
+    pointer input = player.member(input).read(proc);
     // not sure if that's actually the roll
-    auto [yaw, pitch, roll] = readMember(proc, input, &rust::PlayerInput_o::bodyAngles);
+    auto [yaw, pitch, roll] = input.member(bodyAngles).read(proc);
     return {yaw, pitch};
 }
 
@@ -123,4 +112,20 @@ inline auto getListData(WinProcess& proc, pointer<List> list) {
     auto arrayPtr = pointer<pointer<T>>{(uint64_t)&itemsPtr.as_raw()->m_Items[0]};
 
     return std::pair<int32_t, pointer<pointer<T>>>{size, arrayPtr};
+}
+
+// this would be a really cute recursive function
+inline bool is_super(WinProcess& proc, pointer<rust::Il2CppClass_1> super, pointer<rust::Il2CppClass_1> clazz) {
+    assert(super != nullptr);
+    pointer<rust::Il2CppClass_1> parent = super;
+    do {
+        if (clazz == parent) return true;
+        parent = parent.member(parent).read(proc).member(_1);
+    } while (parent != nullptr);
+    return false;
+}
+
+template<typename S, typename C>
+inline bool is_super(WinProcess& proc, pointer<S> super, pointer<C> clazz) {
+    return is_super(proc, super.member(_1), clazz.member(_1));
 }

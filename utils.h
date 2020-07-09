@@ -27,12 +27,8 @@ inline WinProcess* findRust(WinProcessList& list) {
     return list.FindProcNoCase("rustclient.exe");
 }
 
-template<typename C>
-inline pointer<C> get_class(WinProcess& proc) {
-    static WinDll* const ga = proc.modules.GetModuleInfo("GameAssembly.dll");
-    assert(ga);
-    return pointer<C>{ga->info.baseAddress + C::offset};
-}
+uint64_t scan_for_class(WinProcess& proc, WinDll& gameAssembly, const char* name);
+
 
 inline uint64_t getModuleBase(WinProcess& proc, const char* name) {
     auto* module = proc.modules.GetModuleInfo(name);
@@ -48,22 +44,41 @@ inline std::string readCString(WinProcess& proc, pointer<const char> str) {
 }
 
 inline std::string getClassName(WinProcess& proc, uint64_t address) {
-    auto asObject = pointer<rust::Il2CppObject>{address};
+    auto asClass = pointer<rust::Il2CppClass>{address};
 
-    pointer<const char> className = asObject.read(proc).klass.read(proc)._1.name;
+    pointer<const char> className = asClass.member(_1).member(name).read(proc);
     std::string name = readCString(proc, className);
     return name;
+}
+
+template<typename C>
+inline pointer<C> get_class(WinProcess& proc) {
+    static WinDll* const ga = proc.modules.GetModuleInfo("GameAssembly.dll");
+    assert(ga);
+    auto out = pointer<C>{proc.Read<uint64_t>(ga->info.baseAddress + C::offset)};
+
+    /*auto scanned = scan_for_class(proc, *ga, C::name);
+
+    auto scannedName = getClassName(proc, scanned);
+    std::cout << "scanned name = " << scannedName << '\n';
+    auto name1 = getClassName(proc, out.address);
+    std::cout << "name = " << name1 << '\n';
+
+
+    if (scanned != out.address) throw "bad";*/
+    assert(out.address != 0);
+    return out;
 }
 
 inline std::vector<player> getVisiblePlayers(WinProcess& proc) {
     WinDll* ga = proc.modules.GetModuleInfo("GameAssembly.dll");
     assert(ga);
 
-    static auto clazz = get_class<rust::BasePlayer_c>(proc);
-    rust::BufferList_TVal__o playerList = clazz
-            .read(proc)
-            .static_fields.read(proc)
-            .visiblePlayerList.read(proc) // BasePlayer_StaticFields
+    static auto clazzPtr = get_class<rust::BasePlayer_c>(proc);
+    auto clazz = clazzPtr.read(proc);
+    auto fields = clazz.static_fields.read(proc);
+    rust::BufferList_TVal__o playerList =
+            fields.visiblePlayerList.read(proc) // BasePlayer_StaticFields
             .vals.read(proc); // ListDictionary_ulong__BasePlayer__o
 
     auto array = pointer<pointer<rust::BasePlayer_o>>{(uintptr_t)&playerList.buffer.as_raw()->m_Items[0]};
@@ -87,6 +102,7 @@ inline std::vector<player> getVisiblePlayers(WinProcess& proc) {
 
 inline pointer<rust::BasePlayer_o> getLocalPlayer(WinProcess& proc) {
     static auto localPlayerClass = get_class<rust::LocalPlayer_c>(proc);
+
     //auto name = getClassName(proc, localPlayerClass.address);
     //std::cout << "local player class = " << name << '\n';
     auto staticFields = localPlayerClass.member(static_fields)//pointer<pointer<rust::LocalPlayer_StaticFields>>{&localPlayerClass.as_raw()->static_fields}
@@ -128,4 +144,17 @@ inline bool is_super(WinProcess& proc, pointer<rust::Il2CppClass_1> super, point
 template<typename S, typename C>
 inline bool is_super(WinProcess& proc, pointer<S> super, pointer<C> clazz) {
     return is_super(proc, super.member(_1), clazz.member(_1));
+}
+
+template<typename S, typename C>
+inline bool is_super_by_name(WinProcess& proc, pointer<C> clazz) {
+    assert(clazz != nullptr);
+    pointer<rust::Il2CppClass> parent = clazz.template cast<rust::Il2CppClass>();
+    do {
+        // pretty inefficient tbh
+        auto name = getClassName(proc, parent.address);
+        if (name == S::name) return true;
+        parent = parent.member(_1).member(parent).read(proc);
+    } while (parent != nullptr);
+    return false;
 }

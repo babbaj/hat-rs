@@ -60,11 +60,17 @@ struct pointer : pointer_base<T> {
     }
 
     template<typename U>
-    pointer<U> cast() {
-        static_assert(sizeof(U) >= sizeof(T));
-        static_assert(alignof(U) >= alignof(T));
+    pointer<U> cast() const {
+        static_assert(std::is_base_of_v<U, T> || std::is_base_of_v<T, U>);
         return pointer<U>{this->address};
     }
+
+    template<typename U>
+    pointer<U> unsafe_cast() const {
+        return pointer<U>{this->address};
+    }
+
+    // TODO: implicit conversion operator/constructor for super types
 
     template<typename U>
     bool operator==(pointer<U> rhs) {

@@ -149,7 +149,7 @@ inline bool is_super(WinProcess& proc, pointer<S> super, pointer<C> clazz) {
 template<typename S, typename C>
 inline bool is_super_by_name(WinProcess& proc, pointer<C> clazz) {
     assert(clazz != nullptr);
-    pointer<rust::Il2CppClass> parent = clazz.template cast<rust::Il2CppClass>();
+    pointer<rust::Il2CppClass> parent = clazz.template unsafe_cast<rust::Il2CppClass>();
     do {
         // pretty inefficient tbh
         auto name = getClassName(proc, parent.address);

@@ -91,7 +91,7 @@ struct player {
 
     explicit player(WinProcess& proc, pointer<rust::BasePlayer_o> handle_, const rust::BasePlayer_o& player) {
         this->handle = handle_;
-        this->name = readString8(proc, player._displayName);
+        this->name = player._displayName ? readString8(proc, player._displayName) : std::string{"player"};
         this->health = player._health;
         this->position = getPosition(proc, player.m_CachedPtr);
 

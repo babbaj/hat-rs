@@ -7,6 +7,9 @@
 #include "radar.h"
 #include "utils.h"
 
+#include <SDL2/SDL.h>
+
+
 void debug(WinProcess& proc) {
     auto baseNetworkable = get_class<rust::BaseNetworkable_c>(proc);
 
@@ -197,7 +200,7 @@ void eokaLuck(WinProcess& proc, pointer<rust::BasePlayer_o> player) {
     eoka->member(successFraction).write(proc, 1.f);
 }
 
-int main() {
+void hack_main() {
     static_assert(alignof(rust::HeldEntity_o) == 8);
     static_assert(offsetof(rust::BaseProjectile_o, ownerItemUID) == 0x1D0);
     static_assert(offsetof(rust::BaseProjectile_o, deployDelay) == 0x1D8);
@@ -262,6 +265,27 @@ int main() {
     } catch (VMException& ex) {
         printf("Initialization error: %d\n", ex.value);
     }
-
-    return 0;
 }
+
+#ifdef HACK_EXECUTABLE
+int main() {
+    hack_main();
+}
+#endif
+
+#ifdef HACK_SHARED_LIBRARY
+#include <dlfcn.h>
+#include <SDL2/SDL_egl.h>
+#include "overlay.h"
+
+extern "C" EGLBoolean eglSwapBuffers(EGLDisplay dpy, EGLSurface surface) {
+    static auto *swapbuffers = (decltype(&eglSwapBuffers)) dlsym(RTLD_NEXT, "eglSwapBuffers");
+
+    static std::thread hackThread([] {
+       hack_main();
+    });
+    renderOverlay(dpy, surface);
+
+    return swapbuffers(dpy, surface);
+}
+#endif

@@ -18,11 +18,21 @@ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -g -pthread")
 
 set(CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/CMake/;${CMAKE_MODULE_PATH}")
 
-find_package (SFML REQUIRED system window graphics network audio)
+find_package(SDL2 REQUIRED)
+find_package(SFML REQUIRED system window graphics network audio)
 
-include_directories(${SFML_INCLUDE_DIR})
+include_directories(${SDL2_INCLUDE_DIRS})
 
-add_executable(rust_hack main.cpp pointer.hpp csutils.h wrappers.h radar.h radar.cpp utils.h ${VMREAD_SRC})
+set(HACK_SRC main.cpp pointer.hpp csutils.h wrappers.h radar.h radar.cpp utils.h ${VMREAD_SRC})
 
-target_link_libraries(rust_hack ${SFML_LIBRARIES} ${SFML_DEPENDENCIES})
+set(HACK_LIBRARY TRUE)
+if (${HACK_LIBRARY})
+    add_definitions(-DHACK_SHARED_LIBRARY)
+    add_library(rust_hack SHARED ${HACK_SRC} overlay.cpp overlay.h)
+else()
+    add_definitions(-DHACK_EXECUTABLE)
+    add_executable(rust_hack ${HACK_SRC})
+endif()
+
+target_link_libraries(rust_hack ${SDL2_LIBRARIES} ${SFML_LIBRARIES} ${SFML_DEPENDENCIES})
 

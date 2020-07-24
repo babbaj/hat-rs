@@ -200,71 +200,66 @@ void eokaLuck(WinProcess& proc, pointer<rust::BasePlayer_o> player) {
     eoka->member(successFraction).write(proc, 1.f);
 }
 
-void hack_main() {
+void hack_main(WinProcess* rust) {
     static_assert(alignof(rust::HeldEntity_o) == 8);
     static_assert(offsetof(rust::BaseProjectile_o, ownerItemUID) == 0x1D0);
     static_assert(offsetof(rust::BaseProjectile_o, deployDelay) == 0x1D8);
+    puts("rust hack :DD");
 
+    try {
+        debug(*rust);
+        auto test = getLocalPlayer(*rust);
+        if (test) {
+            auto namePtr = test.member(_displayName).read(*rust);
+            std::string name = readString8(*rust, namePtr);
+            std::cout << "Local player name = " << name << '\n';
+            float health = test.member(_health).read(*rust);
+            std::cout << "health = " << health << '\n';
+            auto [x, y, z] = getPosition(*rust, test);
+            std::cout << "Position = " << x << ", " << y << ", " << z << '\n';
+            auto className = getClassName(*rust, test.member(klass).read(*rust).address);
+            std::cout << "Player class = " << className << '\n';
+            auto players = getVisiblePlayers(*rust);
+            std::cout << players.size() << " players\n";
+
+            std::thread radarThread([&] { runRadar(*rust); });
+            std::thread fatBulletThread([&] {
+                while (true) {
+                    auto player = getLocalPlayer(*rust);
+                    fatBullets(*rust, player);
+                }
+            });
+            while (true) {
+                using namespace std::literals::chrono_literals;
+                auto local = getLocalPlayer(*rust);
+
+                doSpider(*rust, local);
+                fullbright(*rust);
+                antiRecoil(*rust, local);
+                fastBow(*rust, local);
+                melee(*rust, local);
+                eokaLuck(*rust, local);
+                //auto grav = getGravityPtr(*rust, local);
+                //grav.write(*rust, 1.5);
+
+                std::this_thread::sleep_for(1ms);
+            }
+            radarThread.join();
+            //fatBulletThread.join();
+        }
+
+    } catch (VMException& ex) {
+        printf("Initialization error: %d\n", ex.value);
+    }
+}
+
+pid_t getPid() {
     pid_t pid;
     FILE* pipe = popen("pidof qemu-system-x86_64", "r");
     fscanf(pipe, "%d", &pid);
     pclose(pipe);
-    std::cout << "pid = " << pid << '\n';
 
-    try {
-        WinContext ctx(pid);
-        ctx.processList.Refresh();
-
-        auto* rust = findRust(ctx.processList);
-        if (rust) {
-            std::cout << "found rust\n";
-
-            debug(*rust);
-            auto test = getLocalPlayer(*rust);
-            if (test) {
-                auto namePtr = test.member(_displayName).read(*rust);
-                std::string name = readString8(*rust, namePtr);
-                std::cout << "Local player name = " << name << '\n';
-                float health = test.member(_health).read(*rust);
-                std::cout << "health = " << health << '\n';
-                auto [x, y, z] = getPosition(*rust, test);
-                std::cout << "Position = " << x << ", " << y << ", " << z << '\n';
-                auto className = getClassName(*rust, test.member(klass).read(*rust).address);
-                std::cout << "Player class = " << className << '\n';
-                auto players = getVisiblePlayers(*rust);
-                std::cout << players.size() << " players\n";
-
-                std::thread radarThread([&] { runRadar(*rust); });
-                std::thread fatBulletThread([&] {
-                    while (true) {
-                        auto player = getLocalPlayer(*rust);
-                        fatBullets(*rust, player);
-                    }
-                });
-                while (true) {
-                    using namespace std::literals::chrono_literals;
-                    auto local = getLocalPlayer(*rust);
-
-                    doSpider(*rust, local);
-                    fullbright(*rust);
-                    antiRecoil(*rust, local);
-                    fastBow(*rust, local);
-                    melee(*rust, local);
-                    eokaLuck(*rust, local);
-                    //auto grav = getGravityPtr(*rust, local);
-                    //grav.write(*rust, 1.5);
-
-                    std::this_thread::sleep_for(1ms);
-                }
-                radarThread.join();
-                //fatBulletThread.join();
-            }
-        } else {
-            std::cout << "couldn't find rust\n";
-        }
-    } catch (VMException& ex) {
-        printf("Initialization error: %d\n", ex.value);
-    }
+    return pid;
 }
 
 #ifdef HACK_EXECUTABLE
@@ -278,13 +273,29 @@ int main() {
 #include <SDL2/SDL_egl.h>
 #include "overlay.h"
 
+static bool initialized = false;
 extern "C" EGLBoolean eglSwapBuffers(EGLDisplay dpy, EGLSurface surface) {
     static auto *swapbuffers = (decltype(&eglSwapBuffers)) dlsym(RTLD_NEXT, "eglSwapBuffers");
 
-    static std::thread hackThread([] {
-       hack_main();
-    });
+    if (!initialized) {
+        static auto ctx = WinContext(getPid());
+        ctx.processList.Refresh();
+        auto* rust = findRust(ctx.processList);
+
+        if (rust) {
+            std::cout << "Found Rust with pid = " << rust->proc.pid << '\n';
+        } else {
+            std::cout << "Failed to find rust process\n";
+            std::terminate();
+        }
+
+        /*static std::thread hackThread([rust] {
+            hack_main(rust);
+        });*/
+        initialized = true;
+    }
     renderOverlay(dpy, surface);
+
 
     return swapbuffers(dpy, surface);
 }

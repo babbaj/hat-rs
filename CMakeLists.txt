@@ -21,6 +21,9 @@ set(CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/CMake/;${CMAKE_MODULE_PATH}")
 find_package(SDL2 REQUIRED)
 find_package(SFML REQUIRED system window graphics network audio)
 
+# GLM
+add_subdirectory(glm)
+
 include_directories(${SDL2_INCLUDE_DIRS})
 
 set(HACK_SRC main.cpp pointer.hpp csutils.h wrappers.h radar.h radar.cpp utils.h ${VMREAD_SRC})
@@ -34,5 +37,6 @@ else()
     add_executable(rust_hack ${HACK_SRC})
 endif()
 
-target_link_libraries(rust_hack ${SDL2_LIBRARIES} ${SFML_LIBRARIES} ${SFML_DEPENDENCIES})
+target_link_libraries(rust_hack glm ${SDL2_LIBRARIES} ${SFML_LIBRARIES} ${SFML_DEPENDENCIES})
 
+configure_file(arial.ttf arial.ttf COPYONLY)

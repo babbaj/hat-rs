@@ -7,9 +7,6 @@
 #include "radar.h"
 #include "utils.h"
 
-#include <SDL2/SDL.h>
-
-
 void debug(WinProcess& proc) {
     auto baseNetworkable = get_class<rust::BaseNetworkable_c>(proc);
 
@@ -17,90 +14,6 @@ void debug(WinProcess& proc) {
     assert(ga);
     auto scannedAddress = scan_for_class(proc, *ga, "BaseNetworkable");
     assert(baseNetworkable.address == scannedAddress);
-}
-
-/*void setNoRecoil(WinProcess& proc, pointer<rust::Item_o> item) {
-    pointer ref = readMember(proc, item, &rust::Item_o::heldEntity).ent_cached;
-    if (!ref) return;
-
-    pointer cast = pointer<rust::BaseProjectile_o>{ref.address};
-    pointer recoilProperties = readMember(proc, cast, &rust::BaseProjectile_o::recoil);
-    if (!recoilProperties) return;
-
-
-    rust::RecoilProperties_o recoil = recoilProperties.read(proc);
-    recoil.recoilYawMin   = 0.f;
-    recoil.recoilYawMax   = 0.f;
-    recoil.recoilPitchMin = 0.f;
-    recoil.recoilPitchMax = 0.f;
-    recoilProperties.write(proc, recoil);
-}*/
-
-std::optional<pointer<rust::Item_o>> getHeldItem(WinProcess& proc, pointer<rust::BasePlayer_o> player) {
-    auto activeId = player.member(clActiveItem).read(proc);
-    if (!activeId) return std::nullopt;
-
-    pointer inv = player.member(inventory).read(proc);
-    pointer belt = inv.member(containerBelt).read(proc);
-    auto itemList = belt.member(itemList).read(proc);
-    auto [size, array] = getListData(proc, itemList);
-
-    for (int i = 0; i < size; i++) {
-        pointer ptr = array.read(proc, i);
-        auto item = pointer<rust::Item_o>{ptr.address}; // dumper mistakenly used protobuf Item
-
-        uint32_t uId = item.member(uid).read(proc);
-        if (activeId == uId) {
-            return {item};
-        }
-    }
-    return std::nullopt;
-}
-
-bool isItemWeapon(WinProcess& proc, pointer<rust::Item_o> item) {
-    auto definition = item.member(info).read(proc);
-    int32_t category = definition.member(category).read(proc);
-    return category == (int)item_category::Weapon;
-}
-
-bool isBaseProjectile(WinProcess& proc, pointer<rust::HeldEntity_o> heldEntity) {
-    auto clazz = heldEntity.member(klass).read(proc);
-    return is_super_by_name<rust::BaseProjectile_c, decltype(clazz)::type>(proc, clazz);
-}
-
-std::optional<pointer<rust::HeldEntity_o>> getHeldEntity(WinProcess& proc, pointer<rust::BasePlayer_o> player) {
-    auto item = getHeldItem(proc, player);
-    if (!item) return std::nullopt;
-
-    pointer ref = item->member(heldEntity).read(proc).ent_cached;
-    if (!ref) return std::nullopt;
-
-    pointer cast = pointer<rust::HeldEntity_o>{ref.address};
-    return cast;
-}
-
-template<typename T, typename C> // TODO: get rid of C parameter
-std::optional<pointer<T>> getHeldT(WinProcess& proc, pointer<rust::BasePlayer_o> player) {
-    static_assert(std::is_base_of_v<rust::HeldEntity_o, T>);
-
-    auto held = getHeldEntity(proc, player);
-    if (!held) return std::nullopt;
-    auto clazz = held->member(klass).read(proc);
-    bool isType = is_super_by_name<C, typename decltype(clazz)::type>(proc, clazz);
-
-    if (isType) {
-        return {held->cast<T>()};
-    } else {
-        return std::nullopt;
-    }
-}
-
-std::optional<pointer<rust::BaseProjectile_o>> getHeldWeapon(WinProcess& proc, pointer<rust::BasePlayer_o> player) {
-    return getHeldT<rust::BaseProjectile_o, rust::BaseProjectile_c>(proc, player);
-}
-
-pointer<rust::PlayerWalkMovement_o> getPlayerMovement(WinProcess& proc, pointer<rust::BasePlayer_o> player) {
-    return pointer<rust::PlayerWalkMovement_o>{player.member(movement).read(proc).address};
 }
 
 // default = 2.5
@@ -200,47 +113,47 @@ void eokaLuck(WinProcess& proc, pointer<rust::BasePlayer_o> player) {
     eoka->member(successFraction).write(proc, 1.f);
 }
 
-void hack_main(WinProcess* rust) {
+void hack_main(WinProcess& rust) {
     static_assert(alignof(rust::HeldEntity_o) == 8);
     static_assert(offsetof(rust::BaseProjectile_o, ownerItemUID) == 0x1D0);
     static_assert(offsetof(rust::BaseProjectile_o, deployDelay) == 0x1D8);
     puts("rust hack :DD");
 
     try {
-        debug(*rust);
-        auto test = getLocalPlayer(*rust);
+        debug(rust);
+        auto test = getLocalPlayer(rust);
         if (test) {
-            auto namePtr = test.member(_displayName).read(*rust);
-            std::string name = readString8(*rust, namePtr);
+            auto namePtr = test.member(_displayName).read(rust);
+            std::string name = readString8(rust, namePtr);
             std::cout << "Local player name = " << name << '\n';
-            float health = test.member(_health).read(*rust);
+            float health = test.member(_health).read(rust);
             std::cout << "health = " << health << '\n';
-            auto [x, y, z] = getPosition(*rust, test);
+            auto [x, y, z] = getPosition(rust, test);
             std::cout << "Position = " << x << ", " << y << ", " << z << '\n';
-            auto className = getClassName(*rust, test.member(klass).read(*rust).address);
+            auto className = getClassName(rust, test.member(klass).read(rust).address);
             std::cout << "Player class = " << className << '\n';
-            auto players = getVisiblePlayers(*rust);
+            auto players = getVisiblePlayers(rust);
             std::cout << players.size() << " players\n";
 
-            std::thread radarThread([&] { runRadar(*rust); });
+            std::thread radarThread([&] { runRadar(rust); });
             std::thread fatBulletThread([&] {
                 while (true) {
-                    auto player = getLocalPlayer(*rust);
-                    fatBullets(*rust, player);
+                    auto player = getLocalPlayer(rust);
+                    fatBullets(rust, player);
                 }
             });
             while (true) {
                 using namespace std::literals::chrono_literals;
-                auto local = getLocalPlayer(*rust);
+                auto local = getLocalPlayer(rust);
 
-                doSpider(*rust, local);
-                fullbright(*rust);
-                antiRecoil(*rust, local);
-                fastBow(*rust, local);
-                melee(*rust, local);
-                eokaLuck(*rust, local);
-                //auto grav = getGravityPtr(*rust, local);
-                //grav.write(*rust, 1.5);
+                doSpider(rust, local);
+                fullbright(rust);
+                antiRecoil(rust, local);
+                fastBow(rust, local);
+                melee(rust, local);
+                eokaLuck(rust, local);
+                //auto grav = getGravityPtr(rust, local);
+                //grav.write(rust, 1.5);
 
                 std::this_thread::sleep_for(1ms);
             }
@@ -264,7 +177,11 @@ pid_t getPid() {
 
 #ifdef HACK_EXECUTABLE
 int main() {
-    hack_main();
+    auto ctx = WinContext(getPid());
+    ctx.processList.Refresh();
+    auto* rust = findRust(ctx.processList);
+
+    hack_main(*rust);
 }
 #endif
 
@@ -277,24 +194,25 @@ static bool initialized = false;
 extern "C" EGLBoolean eglSwapBuffers(EGLDisplay dpy, EGLSurface surface) {
     static auto *swapbuffers = (decltype(&eglSwapBuffers)) dlsym(RTLD_NEXT, "eglSwapBuffers");
 
+    static WinProcess* rust;
     if (!initialized) {
         static auto ctx = WinContext(getPid());
         ctx.processList.Refresh();
-        auto* rust = findRust(ctx.processList);
+        rust = findRust(ctx.processList);
 
         if (rust) {
             std::cout << "Found Rust with pid = " << rust->proc.pid << '\n';
+            initialized = true;
+
+            static std::thread hackThread([] {
+                hack_main(*rust);
+            });
         } else {
             std::cout << "Failed to find rust process\n";
-            std::terminate();
+            //std::terminate();
         }
-
-        /*static std::thread hackThread([rust] {
-            hack_main(rust);
-        });*/
-        initialized = true;
     }
-    renderOverlay(dpy, surface);
+    renderOverlay(dpy, surface, *rust);
 
 
     return swapbuffers(dpy, surface);

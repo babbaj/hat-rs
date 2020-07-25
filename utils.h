@@ -158,3 +158,71 @@ inline bool is_super_by_name(WinProcess& proc, pointer<C> clazz) {
     } while (parent != nullptr);
     return false;
 }
+
+inline std::optional<pointer<rust::Item_o>> getHeldItem(WinProcess& proc, pointer<rust::BasePlayer_o> player) {
+    auto activeId = player.member(clActiveItem).read(proc);
+    if (!activeId) return std::nullopt;
+
+    pointer inv = player.member(inventory).read(proc);
+    pointer belt = inv.member(containerBelt).read(proc);
+    auto itemList = belt.member(itemList).read(proc);
+    auto [size, array] = getListData(proc, itemList);
+
+    for (int i = 0; i < size; i++) {
+        pointer ptr = array.read(proc, i);
+        auto item = pointer<rust::Item_o>{ptr.address}; // dumper mistakenly used protobuf Item
+
+        uint32_t uId = item.member(uid).read(proc);
+        if (activeId == uId) {
+            return {item};
+        }
+    }
+    return std::nullopt;
+}
+
+inline bool isItemWeapon(WinProcess& proc, pointer<rust::Item_o> item) {
+    auto definition = item.member(info).read(proc);
+    int32_t category = definition.member(category).read(proc);
+    return category == (int)item_category::Weapon;
+}
+
+inline bool isBaseProjectile(WinProcess& proc, pointer<rust::HeldEntity_o> heldEntity) {
+    auto clazz = heldEntity.member(klass).read(proc);
+    return is_super_by_name<rust::BaseProjectile_c, decltype(clazz)::type>(proc, clazz);
+}
+
+inline std::optional<pointer<rust::HeldEntity_o>> getHeldEntity(WinProcess& proc, pointer<rust::BasePlayer_o> player) {
+    auto item = getHeldItem(proc, player);
+    if (!item) return std::nullopt;
+
+    pointer ref = item->member(heldEntity).read(proc).ent_cached;
+    if (!ref) return std::nullopt;
+
+    pointer cast = pointer<rust::HeldEntity_o>{ref.address};
+    return cast;
+}
+
+template<typename T, typename C> // TODO: get rid of C parameter
+inline std::optional<pointer<T>> getHeldT(WinProcess& proc, pointer<rust::BasePlayer_o> player) {
+    static_assert(std::is_base_of_v<rust::HeldEntity_o, T>);
+
+    auto held = getHeldEntity(proc, player);
+    if (!held) return std::nullopt;
+    auto clazz = held->member(klass).read(proc);
+    bool isType = is_super_by_name<C, typename decltype(clazz)::type>(proc, clazz);
+
+    if (isType) {
+        return {held->cast<T>()};
+    } else {
+        return std::nullopt;
+    }
+}
+
+inline std::optional<pointer<rust::BaseProjectile_o>> getHeldWeapon(WinProcess& proc, pointer<rust::BasePlayer_o> player) {
+    return getHeldT<rust::BaseProjectile_o, rust::BaseProjectile_c>(proc, player);
+}
+
+inline pointer<rust::PlayerWalkMovement_o> getPlayerMovement(WinProcess& proc, pointer<rust::BasePlayer_o> player) {
+    return pointer<rust::PlayerWalkMovement_o>{player.member(movement).read(proc).address};
+}
+

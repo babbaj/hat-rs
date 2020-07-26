@@ -1,7 +1,7 @@
 #include <iostream>
 #include <vector>
 #include <optional>
-#include <iterator>
+#include <array>
 
 #include "utils.h"
 #include "overlay.h"
@@ -9,7 +9,6 @@
 #define GL_GLEXT_PROTOTYPES
 #include <SDL2/SDL_opengl.h>
 #include <SDL2/SDL.h>
-
 
 #include <glm/vec3.hpp>
 #include <glm/vec2.hpp>
@@ -53,11 +52,39 @@ glm::mat4x4 getViewMatrix(WinProcess& rust) {
     return rust.Read<glm::mat4x4>(ent + 0xDC);
 }
 
+glm::mat4x4 getViewMatrix(glm::vec3 pos, float pitch, float yaw, float fov) {
+    yaw = (-yaw) - 90.0f; // retarded fix?
+    glm::vec3 front;
+    front.x = cos(glm::radians(yaw)) * cos(glm::radians(pitch));
+    front.y = sin(glm::radians(pitch));
+    front.z = sin(glm::radians(yaw)) * cos(glm::radians(pitch));
+    glm::vec3 cameraFront = glm::normalize(front);
+
+    constexpr glm::vec3 up = glm::vec3(0.0f, 1.0f, 0.0f);
+
+    // TODO: don't assume 1440p
+    constexpr float width = 2560;
+    constexpr float height = 1440;
+    glm::mat4 project = glm::perspective(glm::radians(fov), width / height, 0.1f, 100.0f);
+    glm::mat4 view = glm::lookAt(pos, pos + cameraFront, up);
+
+    // correct vertical
+    const glm::mat4 rotation = glm::rotate(glm::mat4(1.0f), glm::radians(180.0f), glm::vec3(0.0f, 1.0f, 0.f));
+    // flip on y axis
+    constexpr glm::mat4 reflection = glm::mat4(
+            -1.0, 0.0, 0.0, 0.0,
+            0.0, 1.0, 0.0, 0.0,
+            0.0, 0.0, 1.0, 0.0,
+            0.0, 0.0, 0.0, 1.0);
+
+    return project * ((rotation * reflection) * view);
+}
+
 // returns ndc (-1/1)
 std::optional<glm::vec2> worldToScreen(const glm::mat4x4& viewMatrix, const glm::vec3& worldPos) {
     glm::vec3 transVec = glm::vec3(viewMatrix[0][3], viewMatrix[1][3], viewMatrix[2][3]);
     glm::vec3 rightVec = glm::vec3(viewMatrix[0][0], viewMatrix[1][0], viewMatrix[2][0]);
-    glm::vec3 upVec = glm::vec3(viewMatrix[0][1], viewMatrix[1][1], viewMatrix[2][1]);
+    glm::vec3 upVec    = glm::vec3(viewMatrix[0][1], viewMatrix[1][1], viewMatrix[2][1]);
 
     float w = glm::dot(transVec, worldPos) + viewMatrix[3][3];
     if (w < 0.098f) return std::nullopt;
@@ -95,6 +122,45 @@ glm::vec3 toGlm(const vector3& vec) {
     return glm::vec3(vec.x, vec.y, vec.z);
 }
 
+
+void renderEsp(std::vector<std::array<glm::vec2, 4>> boxes) {
+    static GLuint programID = LoadShaders(espVertexShader, espFragmentShader);
+    glUseProgram(programID);
+
+    using type = decltype(boxes)::value_type;
+    GLuint buffer; // The ID
+    glGenBuffers(1, &buffer);
+    glEnableVertexAttribArray(0);
+    glBindBuffer(GL_ARRAY_BUFFER, buffer); // Set the buffer as the active array
+    glBufferData(GL_ARRAY_BUFFER, boxes.size() * sizeof(type), boxes.data(), GL_STATIC_DRAW); // Fill the buffer with data
+    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 0, nullptr); // 2 floats per vertex
+    glEnableVertexAttribArray(0); // Enable the vertex array
+    for (int i = 0; i < boxes.size(); i++) {
+        glDrawArrays(GL_LINE_LOOP, i * 4, 4);
+    }
+
+    glDisableVertexAttribArray(0);
+    glDeleteBuffers(1, &buffer);
+}
+
+std::optional<std::array<glm::vec2, 4>> getEspBox(glm::vec3 worldPos, glm::mat4x4 viewMatrix) {
+    auto w2s = [&viewMatrix](glm::vec3 pos) {
+        return worldToScreen(viewMatrix, pos);
+    };
+
+    const auto top = w2s(worldPos + glm::vec3{0, 2.0, 0});
+    const auto bottom = w2s(worldPos);
+    if (!top || !bottom) return std::nullopt;
+
+    //constexpr float width = 0.04;
+    return {{
+        glm::vec2(bottom->x - 0.02, bottom->y), // bottom left
+        glm::vec2(bottom->x + 0.02, bottom->y), // bottom right
+        glm::vec2(top->x + 0.02, top->y), // top right
+        glm::vec2(top->x - 0.02, top->y), // top left
+    }};
+}
+
 std::ostream& operator<<(std::ostream& out, const glm::mat4x4 matrix) {
     out << '[';
     for (int i = 0; i < 4; i++) {
@@ -107,22 +173,6 @@ std::ostream& operator<<(std::ostream& out, const glm::mat4x4 matrix) {
     out << ']';
 
     return out;
-}
-
-void renderEsp(std::vector<glm::vec2> points) {
-    static GLuint programID = LoadShaders(espVertexShader, espFragmentShader);
-    glUseProgram(programID);
-
-    GLuint buffer; // The ID
-    glGenBuffers(1, &buffer);
-    glEnableVertexAttribArray(0);
-    glBindBuffer(GL_ARRAY_BUFFER, buffer); // Set the buffer as the active array
-    glBufferData(GL_ARRAY_BUFFER, points.size() * sizeof(glm::vec2), points.data(), GL_STATIC_DRAW); // Fill the buffer with data
-    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, sizeof(glm::vec2), nullptr); // Specify how the buffer is converted to vertices
-    glEnableVertexAttribArray(0); // Enable the vertex array
-    glDrawArrays(GL_POINTS, 0, points.size());
-    glDisableVertexAttribArray(0);
-    glDeleteBuffers(1, &buffer);
 }
 
 void renderOverlay(EGLDisplay dpy, EGLSurface surface, WinProcess& rust) {
@@ -138,23 +188,31 @@ void renderOverlay(EGLDisplay dpy, EGLSurface surface, WinProcess& rust) {
     //test();
     //return;
 
-    std::vector players = getVisiblePlayers(rust);
-    std::vector<glm::vec2> screenPositions; screenPositions.reserve(players.size());
+    const std::vector players = getVisiblePlayers(rust);
+    std::vector<std::array<glm::vec2, 4>> espBoxes;
 
-    glm::mat4x4 viewMatrix = getViewMatrix(rust);
-    //std::cout << "matrix = " << viewMatrix << '\n';
+    //glm::mat4x4 viewMatrix = getViewMatrix(rust);
+    const player local = player{rust, getLocalPlayer(rust)};
+    const glm::vec3 headPos = glm::vec3(local.position.x, local.position.y + 2.0f, local.position.z); // TODO: get head bone posiiton
+    glm::mat4 viewMatrix = getViewMatrix(headPos, local.angles.x, local.angles.y, 90.0f);
+
+    //std::cout << viewMatrix << '\n';
     for (const auto& player : players) {
         // TODO: filter local player
         auto pos = toGlm(player.position);
-        std::optional screenPos = worldToScreen(viewMatrix, pos);
-        if (screenPos) {
-            screenPositions.push_back(*screenPos);
+        std::optional bpx = getEspBox(pos, viewMatrix);
+        if (bpx) {
+            espBoxes.push_back(*bpx);
         }
     }
 
-    //std::cout << players.size() << " players\n";
-    //std::cout << screenPositions.size() << " visible players\n";
-    renderEsp(screenPositions);
+    //std::cout << espBoxes.size() << " visible players\n";
+    renderEsp(espBoxes);
+
+    /*renderEsp({
+            {glm::vec2{0.0f, 0.0f}, glm::vec2{0.0f, 0.2f}, glm::vec2{0.2f, 0.2f}, glm::vec2{0.2f, 0.0f}},
+            {glm::vec2{-0.5f, -0.5f}, glm::vec2{-0.5f, -0.3f}, glm::vec2{-0.3f, -0.3f}, glm::vec2{-0.3f, -0.5f}}
+    });*/
 }
 
 
@@ -255,9 +313,9 @@ void main() {
     glEnableVertexAttribArray(0);
     glBindBuffer(GL_ARRAY_BUFFER, buffer); // Set the buffer as the active array
     glBufferData(GL_ARRAY_BUFFER, sizeof(line), line, GL_STATIC_DRAW); // Fill the buffer with data
-    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 2 * sizeof(float), nullptr); // Specify how the buffer is converted to vertices
+    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 0, nullptr); // Specify how the buffer is converted to vertices
     glEnableVertexAttribArray(0); // Enable the vertex array
-    glDrawArrays(GL_POINTS, 0, 2);
+    glDrawArrays(GL_LINES, 0, 2);
     glDisableVertexAttribArray(0);
     glDeleteBuffers(1, &buffer);
 }

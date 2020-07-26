@@ -82,7 +82,7 @@ struct player {
     std::string name;
     float health;
     vector3 position;
-    vector2 angles;
+    vector2 angles; // pitch/yaw
     uint32_t flags; // playerFlags
 
     [[nodiscard]] bool isSleeping() const {

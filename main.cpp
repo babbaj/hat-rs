@@ -214,7 +214,6 @@ extern "C" EGLBoolean eglSwapBuffers(EGLDisplay dpy, EGLSurface surface) {
     }
     renderOverlay(dpy, surface, *rust);
 
-
     return swapbuffers(dpy, surface);
 }
 #endif

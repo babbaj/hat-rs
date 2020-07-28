@@ -16,7 +16,6 @@
 #include <glm/ext.hpp>
 
 #include <dlfcn.h>
-#include <fstream>
 
 static SDL_Window* lg_window;
 
@@ -36,7 +35,7 @@ void printError() {
 
 GLuint LoadShaders(const char* vertexShaderCode, const char* fragmentShaderCode);
 
-glm::mat4x4 getViewMatrix(WinProcess& rust) {
+[[deprecated]] glm::mat4 getViewMatrix(WinProcess& rust) {
     constexpr auto gom_offset = 0x17A6AD8;
     WinDll* const unity = rust.modules.GetModuleInfo("UnityPlayer.dll");
     auto gom = rust.Read<uint64_t>(unity->info.baseAddress + gom_offset);
@@ -49,10 +48,10 @@ glm::mat4x4 getViewMatrix(WinProcess& rust) {
     assert(objClass);
     auto ent = rust.Read<uint64_t>(objClass + 0x18);
     assert(ent);
-    return rust.Read<glm::mat4x4>(ent + 0xDC);
+    return rust.Read<glm::mat4>(ent + 0xDC);
 }
 
-glm::mat4x4 getViewMatrix(glm::vec3 pos, float pitch, float yaw, float fov) {
+glm::mat4 getViewMatrix(glm::vec3 pos, float pitch, float yaw, float fov) {
     yaw = (-yaw) - 90.0f; // retarded fix?
     glm::vec3 front;
     front.x = cos(glm::radians(yaw)) * cos(glm::radians(pitch));
@@ -65,7 +64,7 @@ glm::mat4x4 getViewMatrix(glm::vec3 pos, float pitch, float yaw, float fov) {
     // TODO: don't assume 1440p
     constexpr float width = 2560;
     constexpr float height = 1440;
-    glm::mat4 project = glm::perspective(glm::radians(fov), width / height, 0.1f, 100.0f);
+    glm::mat4 project = glm::perspective(glm::radians(fov), width / height, 0.1f, 500.0f);
     glm::mat4 view = glm::lookAt(pos, pos + cameraFront, up);
 
     // correct vertical
@@ -81,15 +80,15 @@ glm::mat4x4 getViewMatrix(glm::vec3 pos, float pitch, float yaw, float fov) {
 }
 
 // returns ndc (-1/1)
-std::optional<glm::vec2> worldToScreen(const glm::mat4x4& viewMatrix, const glm::vec3& worldPos) {
-    glm::vec3 transVec = glm::vec3(viewMatrix[0][3], viewMatrix[1][3], viewMatrix[2][3]);
-    glm::vec3 rightVec = glm::vec3(viewMatrix[0][0], viewMatrix[1][0], viewMatrix[2][0]);
-    glm::vec3 upVec    = glm::vec3(viewMatrix[0][1], viewMatrix[1][1], viewMatrix[2][1]);
+std::optional<glm::vec2> worldToScreen(const glm::mat4& matrix, const glm::vec3& worldPos) {
+    glm::vec3 transVec{matrix[0][3], matrix[1][3], matrix[2][3]};
+    glm::vec3 rightVec{matrix[0][0], matrix[1][0], matrix[2][0]};
+    glm::vec3 upVec   {matrix[0][1], matrix[1][1], matrix[2][1]};
 
-    float w = glm::dot(transVec, worldPos) + viewMatrix[3][3];
+    float w = glm::dot(transVec, worldPos) + matrix[3][3];
     if (w < 0.098f) return std::nullopt;
-    float y = glm::dot(upVec, worldPos) + viewMatrix[3][1];
-    float x = glm::dot(rightVec, worldPos) + viewMatrix[3][0];
+    float y = glm::dot(upVec, worldPos) + matrix[3][1];
+    float x = glm::dot(rightVec, worldPos) + matrix[3][0];
 
     // this is normally converted to screen space coords
     return glm::vec2(x / w, y / w);
@@ -143,25 +142,47 @@ void renderEsp(std::vector<std::array<glm::vec2, 4>> boxes) {
     glDeleteBuffers(1, &buffer);
 }
 
-std::optional<std::array<glm::vec2, 4>> getEspBox(glm::vec3 worldPos, glm::mat4x4 viewMatrix) {
+std::pair<glm::vec2, glm::vec2> getEspSides(glm::vec2 from, glm::vec2 target, float width) {
+    glm::vec2 v = target - from;
+
+    float dist = glm::sqrt(v.x * v.x + v.y * v.y);
+    v = v / dist; // length of v is now 1
+    v = v * (width / 2); // length of v is now width/2
+
+    glm::vec2 leftV = glm::vec2(-v.y, v.x);
+    glm::vec2 rightV = glm::vec2(v.y, -v.x);
+
+    return {
+      glm::vec2(target.x + leftV.x, target.y + leftV.y),
+      glm::vec2(target.x + rightV.x, target.y + rightV.y)
+    };
+}
+
+std::optional<std::array<glm::vec2, 4>> getEspBox(glm::vec3 myPos, glm::vec3 playerPos, glm::mat4 viewMatrix) {
     auto w2s = [&viewMatrix](glm::vec3 pos) {
         return worldToScreen(viewMatrix, pos);
     };
 
-    const auto top = w2s(worldPos + glm::vec3{0, 2.0, 0});
-    const auto bottom = w2s(worldPos);
-    if (!top || !bottom) return std::nullopt;
+    auto [left, right] = getEspSides({myPos.x, myPos.z}, {playerPos.x, playerPos.z}, 1);
+
+    // TODO: this can be optimized by w2s for 2 corners and then filling in the other 2
+    auto topL = w2s(glm::vec3{left.x, playerPos.y + 1.8, left.y});
+    auto topR = w2s(glm::vec3{right.x, playerPos.y + 1.8, right.y});
+    auto bottomL = w2s(glm::vec3{left.x, playerPos.y, left.y});
+    auto bottomR = w2s(glm::vec3{right.x, playerPos.y, right.y});
+
+    if (!topL || !topR || !bottomL || !bottomR) return std::nullopt;
 
     //constexpr float width = 0.04;
     return {{
-        glm::vec2(bottom->x - 0.02, bottom->y), // bottom left
-        glm::vec2(bottom->x + 0.02, bottom->y), // bottom right
-        glm::vec2(top->x + 0.02, top->y), // top right
-        glm::vec2(top->x - 0.02, top->y), // top left
+        *bottomL, // bottom left
+        *bottomR, // bottom right
+        *topR, // top right
+        *topL, // top left
     }};
 }
 
-std::ostream& operator<<(std::ostream& out, const glm::mat4x4 matrix) {
+std::ostream& operator<<(std::ostream& out, const glm::mat4& matrix) {
     out << '[';
     for (int i = 0; i < 4; i++) {
         out << '[';
@@ -191,16 +212,16 @@ void renderOverlay(EGLDisplay dpy, EGLSurface surface, WinProcess& rust) {
     const std::vector players = getVisiblePlayers(rust);
     std::vector<std::array<glm::vec2, 4>> espBoxes;
 
-    //glm::mat4x4 viewMatrix = getViewMatrix(rust);
+    //glm::mat4 viewMatrix = getViewMatrix(rust);
     const player local = player{rust, getLocalPlayer(rust)};
-    const glm::vec3 headPos = glm::vec3(local.position.x, local.position.y + 2.0f, local.position.z); // TODO: get head bone posiiton
+    const glm::vec3 headPos = glm::vec3(local.position.x, local.position.y + 1.6f, local.position.z); // TODO: get head bone posiiton
     glm::mat4 viewMatrix = getViewMatrix(headPos, local.angles.x, local.angles.y, 90.0f);
 
     //std::cout << viewMatrix << '\n';
     for (const auto& player : players) {
         // TODO: filter local player
         auto pos = toGlm(player.position);
-        std::optional bpx = getEspBox(pos, viewMatrix);
+        std::optional bpx = getEspBox(headPos, pos, viewMatrix);
         if (bpx) {
             espBoxes.push_back(*bpx);
         }

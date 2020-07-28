@@ -211,8 +211,9 @@ extern "C" EGLBoolean eglSwapBuffers(EGLDisplay dpy, EGLSurface surface) {
             std::cout << "Failed to find rust process\n";
             //std::terminate();
         }
+    } else {
+        renderOverlay(dpy, surface, *rust);
     }
-    renderOverlay(dpy, surface, *rust);
 
     return swapbuffers(dpy, surface);
 }

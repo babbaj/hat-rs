@@ -95,7 +95,7 @@ std::optional<glm::vec2> worldToScreen(const glm::mat4& matrix, const glm::vec3&
 }
 
 constexpr const char* espVertexShader =
-R"(
+/*R"(
 #version 330 core
 
 layout(location = 0) in vec2 pos;
@@ -104,10 +104,23 @@ void main() {
     gl_Position.xyz = vec3(pos, 0.0);
     gl_Position.w = 1.0;
 }
+)";*/
+R"(
+#version 430 core
+
+layout(std430, binding = 0) readonly buffer Boxes {
+    vec2 vertices[][4];
+};
+
+void main() {
+    vec2 pos = vertices[gl_InstanceID][gl_VertexID];
+    gl_Position.xyz = vec3(pos, 0.0);
+    gl_Position.w = 1.0;
+}
 )";
 
 constexpr const char* espFragmentShader =
-        R"(
+R"(
 #version 330 core
 
 out vec3 color;
@@ -129,16 +142,15 @@ void renderEsp(std::vector<std::array<glm::vec2, 4>> boxes) {
     using type = decltype(boxes)::value_type;
     GLuint buffer; // The ID
     glGenBuffers(1, &buffer);
-    glEnableVertexAttribArray(0);
-    glBindBuffer(GL_ARRAY_BUFFER, buffer); // Set the buffer as the active array
-    glBufferData(GL_ARRAY_BUFFER, boxes.size() * sizeof(type), boxes.data(), GL_STATIC_DRAW); // Fill the buffer with data
-    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 0, nullptr); // 2 floats per vertex
-    glEnableVertexAttribArray(0); // Enable the vertex array
-    for (int i = 0; i < boxes.size(); i++) {
-        glDrawArrays(GL_LINE_LOOP, i * 4, 4);
-    }
+    //glEnableVertexAttribArray(0);
+    glBindBuffer(GL_SHADER_STORAGE_BUFFER, buffer); // Set the buffer as the active array
+    glBufferData(GL_SHADER_STORAGE_BUFFER, boxes.size() * sizeof(type), boxes.data(), GL_STATIC_DRAW);
+    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, buffer);
+    glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0); // unbind
+    //glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 0, nullptr); // 2 floats per vertex
+    glDrawArraysInstanced(GL_LINE_LOOP, 0, 4, boxes.size());
 
-    glDisableVertexAttribArray(0);
+    //glDisableVertexAttribArray(0);
     glDeleteBuffers(1, &buffer);
 }
 
@@ -215,6 +227,7 @@ void renderOverlay(EGLDisplay dpy, EGLSurface surface, WinProcess& rust) {
     //glm::mat4 viewMatrix = getViewMatrix(rust);
     const player local = player{rust, getLocalPlayer(rust)};
     const glm::vec3 headPos = glm::vec3(local.position.x, local.position.y + 1.6f, local.position.z); // TODO: get head bone posiiton
+    // ConVar_Graphics_StaticFields::_fov
     glm::mat4 viewMatrix = getViewMatrix(headPos, local.angles.x, local.angles.y, 90.0f);
 
     //std::cout << viewMatrix << '\n';

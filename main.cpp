@@ -107,7 +107,7 @@ void melee(WinProcess& proc, pointer<rust::BasePlayer_o> player) {
     melee->member(blockSprintOnAttack).write(proc, false);
 }
 
-void eokaLuck(WinProcess& proc, pointer<rust::BasePlayer_o> player) {
+void instantEoka(WinProcess& proc, pointer<rust::BasePlayer_o> player) {
     std::optional eoka = getHeldT<rust::FlintStrikeWeapon_o, rust::FlintStrikeWeapon_c>(proc, player);
     if (!eoka) return;
     eoka->member(successFraction).write(proc, 1.f);
@@ -151,7 +151,7 @@ void hack_main(WinProcess& rust) {
                 antiRecoil(rust, local);
                 fastBow(rust, local);
                 melee(rust, local);
-                eokaLuck(rust, local);
+                instantEoka(rust, local);
                 //auto grav = getGravityPtr(rust, local);
                 //grav.write(rust, 1.5);
 

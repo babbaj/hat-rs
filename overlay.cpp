@@ -106,7 +106,7 @@ void main() {
 }
 )";*/
 R"(
-#version 430 core
+#version 320 es
 
 layout(std430, binding = 0) readonly buffer Boxes {
     vec2 vertices[][4];
@@ -121,12 +121,12 @@ void main() {
 
 constexpr const char* espFragmentShader =
 R"(
-#version 330 core
+#version 320 es
 
-out vec3 color;
+out mediump vec3 color;
 
 void main() {
-  color = vec3(1,0,0);
+  color = vec3(1.0, 0.0, 0.0);
 }
 )";
 
@@ -135,11 +135,11 @@ glm::vec3 toGlm(const vector3& vec) {
 }
 
 
-void renderEsp(std::vector<std::array<glm::vec2, 4>> boxes) {
+void renderEsp(const std::vector<std::array<glm::vec2, 4>>& boxes) {
     static GLuint programID = LoadShaders(espVertexShader, espFragmentShader);
     glUseProgram(programID);
 
-    using type = decltype(boxes)::value_type;
+    using type = std::decay_t<decltype(boxes)>::value_type;
     GLuint buffer; // The ID
     glGenBuffers(1, &buffer);
     //glEnableVertexAttribArray(0);
@@ -178,10 +178,10 @@ std::optional<std::array<glm::vec2, 4>> getEspBox(glm::vec3 myPos, glm::vec3 pla
     auto [left, right] = getEspSides({myPos.x, myPos.z}, {playerPos.x, playerPos.z}, 1);
 
     // TODO: this can be optimized by w2s for 2 corners and then filling in the other 2
-    auto topL = w2s(glm::vec3{left.x, playerPos.y + 1.8, left.y});
-    auto topR = w2s(glm::vec3{right.x, playerPos.y + 1.8, right.y});
-    auto bottomL = w2s(glm::vec3{left.x, playerPos.y, left.y});
-    auto bottomR = w2s(glm::vec3{right.x, playerPos.y, right.y});
+    auto topL = w2s({left.x, playerPos.y + 1.8, left.y});
+    auto topR = w2s({right.x, playerPos.y + 1.8, right.y});
+    auto bottomL = w2s({left.x, playerPos.y, left.y});
+    auto bottomR = w2s({right.x, playerPos.y, right.y});
 
     if (!topL || !topR || !bottomL || !bottomR) return std::nullopt;
 

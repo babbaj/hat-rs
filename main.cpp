@@ -14,6 +14,9 @@ void debug(WinProcess& proc) {
     assert(ga);
     auto scannedAddress = scan_for_class(proc, *ga, "BaseNetworkable");
     assert(baseNetworkable.address == scannedAddress);
+    assert(scannedAddress != 0);
+    std::cout << std::hex << "BaseNetworkable = " << scannedAddress << '\n';
+    printf("BaseNetworkable = %ld\n", scannedAddress);
 }
 
 // default = 2.5
@@ -199,7 +202,6 @@ extern "C" EGLBoolean eglSwapBuffers(EGLDisplay dpy, EGLSurface surface) {
         static auto ctx = WinContext(getPid());
         ctx.processList.Refresh();
         rust = findRust(ctx.processList);
-
         if (rust) {
             std::cout << "Found Rust with pid = " << rust->proc.pid << '\n';
             initialized = true;

@@ -27,7 +27,7 @@ uint64_t scan_for_class(WinProcess& proc, WinDll& gameAssembly, const char* name
         if (name_pointer == 0) { continue; }
         proc.Read(name_pointer, klass_name, sizeof(klass_name));
         if (!strcmp(klass_name, name)) {
-            //printf("[*] 0x%x -> %s\n", data_header.VirtualAddress + offset, name);
+            printf("[*] 0x%x -> %s\n", data_header.VirtualAddress + offset, name);
             return klass;
         }
     }

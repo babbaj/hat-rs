@@ -33,6 +33,9 @@ void doSpider(WinProcess& proc, pointer<rust::BasePlayer_o> player) {
 
 void fullbright(WinProcess& proc) {
     static pointer tod_sky_clazz = get_class<rust::TOD_Sky_c>(proc);
+    if (tod_sky_clazz == nullptr) {
+        return;
+    }
 
     auto fields = tod_sky_clazz.member(static_fields).read(proc);
     pointer list = fields.read(proc).instances;
@@ -123,45 +126,58 @@ void hack_main(WinProcess& rust) {
     puts("rust hack :DD");
 
     try {
-        debug(rust);
-        auto test = getLocalPlayer(rust);
-        if (test) {
-            auto namePtr = test.member(_displayName).read(rust);
-            std::string name = readString8(rust, namePtr);
-            std::cout << "Local player name = " << name << '\n';
-            float health = test.member(_health).read(rust);
-            std::cout << "health = " << health << '\n';
-            auto [x, y, z] = getPosition(rust, test);
-            std::cout << "Position = " << x << ", " << y << ", " << z << '\n';
-            auto className = getClassName(rust, test.member(klass).read(rust).address);
-            std::cout << "Player class = " << className << '\n';
-            auto players = getVisiblePlayers(rust);
-            std::cout << players.size() << " players\n";
+        while (true) {
+            auto test = getLocalPlayer(rust);
+            if (test) {
+                debug(rust);
+                auto namePtr = test.member(_displayName).read(rust);
+                std::string name = readString8(rust, namePtr);
+                std::cout << "Local player name = " << name << '\n';
+                float health = test.member(_health).read(rust);
+                std::cout << "health = " << health << '\n';
+                auto[x, y, z] = getPosition(rust, test);
+                std::cout << "Position = " << x << ", " << y << ", " << z << '\n';
+                auto className = getClassName(rust, test.member(klass).read(rust).address);
+                std::cout << "Player class = " << className << '\n';
+                auto players = getVisiblePlayers(rust);
+                std::cout << players.size() << " players\n";
 
-            std::thread radarThread([&] { runRadar(rust); });
-            std::thread fatBulletThread([&] {
+                std::thread radarThread([&] {
+                    runRadar(rust);
+                    using namespace std::literals::chrono_literals;
+                    std::this_thread::sleep_for(50ms);
+                });
+                std::thread fatBulletThread([&] {
+                    while (true) {
+                        auto player = getLocalPlayer(rust);
+                        fatBullets(rust, player);
+
+                        using namespace std::literals::chrono_literals;
+                        std::this_thread::sleep_for(1ms);
+                    }
+                });
                 while (true) {
-                    auto player = getLocalPlayer(rust);
-                    fatBullets(rust, player);
+                    auto local = getLocalPlayer(rust);
+
+                    doSpider(rust, local);
+                    fullbright(rust);
+                    antiRecoil(rust, local);
+                    fastBow(rust, local);
+                    melee(rust, local);
+                    instantEoka(rust, local);
+                    //auto grav = getGravityPtr(rust, local);
+                    //grav.write(rust, 1.5);
+
+                    using namespace std::literals::chrono_literals;
+                    std::this_thread::sleep_for(10ms);
                 }
-            });
-            while (true) {
-                using namespace std::literals::chrono_literals;
-                auto local = getLocalPlayer(rust);
-
-                doSpider(rust, local);
-                fullbright(rust);
-                antiRecoil(rust, local);
-                fastBow(rust, local);
-                melee(rust, local);
-                instantEoka(rust, local);
-                //auto grav = getGravityPtr(rust, local);
-                //grav.write(rust, 1.5);
-
-                std::this_thread::sleep_for(1ms);
+                radarThread.join();
+                //fatBulletThread.join();
+                continue;
             }
-            radarThread.join();
-            //fatBulletThread.join();
+
+            using namespace std::literals::chrono_literals;
+            std::this_thread::sleep_for(1000ms);
         }
 
     } catch (VMException& ex) {

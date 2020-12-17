@@ -221,11 +221,17 @@ void renderOverlay(EGLDisplay dpy, EGLSurface surface, WinProcess& rust) {
     //test();
     //return;
 
+    const auto localPtr = getLocalPlayer(rust);
+    if (!localPtr) {
+        return;
+    }
     const std::vector players = getVisiblePlayers(rust);
+    if (players.empty()) {
+        return;
+    }
     std::vector<std::array<glm::vec2, 4>> espBoxes;
-
     //glm::mat4 viewMatrix = getViewMatrix(rust);
-    const player local = player{rust, getLocalPlayer(rust)};
+    const player local = player{rust, localPtr};
     const glm::vec3 headPos = glm::vec3(local.position.x, local.position.y + 1.6f, local.position.z); // TODO: get head bone posiiton
     // ConVar_Graphics_StaticFields::_fov
     glm::mat4 viewMatrix = getViewMatrix(headPos, local.angles.x, local.angles.y, 90.0f);

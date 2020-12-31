@@ -36,7 +36,7 @@ void printError() {
 GLuint LoadShaders(const char* vertexShaderCode, const char* fragmentShaderCode);
 
 [[deprecated]] glm::mat4 getViewMatrix(WinProcess& rust) {
-    constexpr auto gom_offset = 0x17A6AD8;
+    constexpr auto gom_offset = 0x17C1F18;
     WinDll* const unity = rust.modules.GetModuleInfo("UnityPlayer.dll");
     auto gom = rust.Read<uint64_t>(unity->info.baseAddress + gom_offset);
     assert(gom);
@@ -51,6 +51,7 @@ GLuint LoadShaders(const char* vertexShaderCode, const char* fragmentShaderCode)
     return rust.Read<glm::mat4>(ent + 0xDC);
 }
 
+// reliable fallback
 glm::mat4 getViewMatrix(glm::vec3 pos, float pitch, float yaw, float fov) {
     yaw = (-yaw) - 90.0f; // retarded fix?
     glm::vec3 front;
@@ -78,6 +79,36 @@ glm::mat4 getViewMatrix(glm::vec3 pos, float pitch, float yaw, float fov) {
 
     return project * ((rotation * reflection) * view);
 }
+
+glm::mat4 getViewMatrix0(WinProcess& rust) {
+    static constexpr uint64_t gom_offset = 0x17C1F18; // TODO pattern finder
+    static const uint64_t unity_player = rust.modules.GetModuleInfo("UnityPlayer.dll")->info.baseAddress;
+
+    static uintptr_t camera = 0; // TODO: I think this changes when joining a new server
+    if (!camera) {
+        auto gom = rust.Read<uintptr_t>(unity_player + gom_offset);
+        assert(gom);
+        if (!gom) return {};
+        auto tagged_objects = rust.Read<uintptr_t>(gom + 0x8);
+        assert(tagged_objects);
+        if (!tagged_objects) return {};
+        auto game_object = rust.Read<uintptr_t>(tagged_objects + 0x10);
+        assert(game_object);
+        if (!game_object) return {};
+        auto object_class = rust.Read<uintptr_t>(game_object + 0x30);
+        assert(object_class);
+        if (!object_class) return {};
+
+        camera = rust.Read<uintptr_t>(object_class + 0x18);
+    }
+
+    if (camera) {
+        return rust.Read<glm::mat4>(camera + 0xDC);
+    } else {
+        return {};
+    }
+}
+
 
 // returns ndc (-1/1)
 std::optional<glm::vec2> worldToScreen(const glm::mat4& matrix, const glm::vec3& worldPos) {
@@ -230,11 +261,11 @@ void renderOverlay(EGLDisplay dpy, EGLSurface surface, WinProcess& rust) {
         return;
     }
     std::vector<std::array<glm::vec2, 4>> espBoxes;
-    //glm::mat4 viewMatrix = getViewMatrix(rust);
     const player local = player{rust, localPtr};
     const glm::vec3 headPos = glm::vec3(local.position.x, local.position.y + 1.6f, local.position.z); // TODO: get head bone posiiton
     // ConVar_Graphics_StaticFields::_fov
-    glm::mat4 viewMatrix = getViewMatrix(headPos, local.angles.x, local.angles.y, 90.0f);
+    //glm::mat4 viewMatrix = getViewMatrix(headPos, local.angles.x, local.angles.y, 90.0f);
+    glm::mat4 viewMatrix = getViewMatrix0(rust);
 
     //std::cout << viewMatrix << '\n';
     for (const auto& player : players) {

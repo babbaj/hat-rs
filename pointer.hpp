@@ -1,10 +1,13 @@
 #pragma once
 
-#include "vmread/hlapi/hlapi.h"
 #include <cstdint>
 #include <cassert>
 #include <type_traits>
 #include <exception>
+#include <span>
+
+#include "vmread/hlapi/hlapi.h"
+
 
 template<typename T, typename Owner>
 inline constexpr std::ptrdiff_t offset_of(T Owner::*member) {
@@ -38,7 +41,6 @@ struct pointer_base {
     }
 };
 
-// TODO: add function to get pointer to member
 template<typename T>
 struct pointer : pointer_base<T> {
     using pointer_base<T>::pointer_base;
@@ -51,6 +53,13 @@ struct pointer : pointer_base<T> {
         //assert(this->address);
         nullCheck();
         return proc.Read<T>(this->address + (idx * sizeof(T)));
+    }
+
+    std::vector<T> readArray(WinProcess& proc, size_t len) const {
+        nullCheck();
+        std::vector<T> vec(len);
+        proc.Read(this->address, vec.data(), len * sizeof(T));
+        return vec;
     }
 
     void write(WinProcess& proc, const T& value, size_t idx = 0) {

@@ -1,4 +1,6 @@
 #include <cmath>
+#include <chrono>
+#include <thread>
 
 #include <SFML/Graphics.hpp>
 
@@ -95,5 +97,8 @@ void runRadar(WinProcess& rust) {
         }
 
         window.display();
+
+        using namespace std::literals::chrono_literals;
+        std::this_thread::sleep_for(16ms);
     }
 }

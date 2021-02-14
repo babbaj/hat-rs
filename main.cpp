@@ -2,7 +2,6 @@
 #include <cstdio>
 #include <thread>
 #include <chrono>
-#include <tuple>
 
 #include "radar.h"
 #include "utils.h"
@@ -22,7 +21,7 @@ void debug(WinProcess& proc) {
 // default = 2.5
 pointer<float> getGravityPtr(WinProcess& proc, pointer<rust::BasePlayer_o> player) {
     pointer movement = getPlayerMovement(proc, player);
-    return pointer<float>{&movement.as_raw()->gravityMultiplier};
+    return movement.member(gravityMultiplier);
 }
 
 void doSpider(WinProcess& proc, pointer<rust::BasePlayer_o> player) {
@@ -39,10 +38,9 @@ void fullbright(WinProcess& proc) {
 
     auto fields = tod_sky_clazz.member(static_fields).read(proc);
     pointer list = fields.read(proc).instances;
-    auto [size, ptrArray] = getListData(proc, list);
 
-    for (int i = 0; i < size; i++) {
-        pointer<rust::TOD_Sky_o> sky = ptrArray.index(i).read(proc);
+    std::vector instances = readList(proc, list);
+    for (auto sky : instances) {
         sky.member(_IsDay_k__BackingField).write(proc, true);
 
         pointer cycleParams = sky.member(Cycle).read(proc);
@@ -78,6 +76,10 @@ void antiRecoil(WinProcess& proc, pointer<rust::BasePlayer_o> player) {
     recoil.recoilPitchMin = 0.f;
     recoil.recoilPitchMax = 0.f;
     recoilPtr.write(proc, recoil);
+
+    //gun->member(aimCone).write(proc, 0.f);
+    //gun->member(aimConePenaltyMax).write(proc, 0.f);
+    //gun->member(NoiseRadius).write(proc, 0.f);
 }
 
 void fatBullets(WinProcess& proc, pointer<rust::BasePlayer_o> player) {
@@ -87,10 +89,9 @@ void fatBullets(WinProcess& proc, pointer<rust::BasePlayer_o> player) {
     pointer projectileList = weapon->member(createdProjectiles).read(proc);
     if (!projectileList) return;
 
-    auto [numP, array] = getListData(proc, projectileList);
-    for (int i = 0; i < numP; i++) {
-        auto projectile = array.read(proc, i);
-        projectile.member(thickness).write(proc, 1.5f);
+    std::vector vec = readList(proc, projectileList);
+    for (const auto& proj : vec) {
+        proj.member(thickness).write(proc, 1.0f);
     }
 }
 
@@ -108,7 +109,7 @@ void fastBow(WinProcess& proc, pointer<rust::BasePlayer_o> player) {
 void melee(WinProcess& proc, pointer<rust::BasePlayer_o> player) {
     std::optional melee = getHeldT<rust::BaseMelee_o, rust::BaseMelee_c>(proc, player);
     if (!melee) return;
-    melee->member(maxDistance).write(proc, 10.f);
+    //melee->member(maxDistance).write(proc, 10.f);
     melee->member(attackRadius).write(proc, 1.f);
     melee->member(blockSprintOnAttack).write(proc, false);
 }
@@ -144,8 +145,6 @@ void hack_main(WinProcess& rust) {
 
                 std::thread radarThread([&] {
                     runRadar(rust);
-                    using namespace std::literals::chrono_literals;
-                    std::this_thread::sleep_for(50ms);
                 });
                 std::thread fatBulletThread([&] {
                     while (true) {
@@ -165,7 +164,7 @@ void hack_main(WinProcess& rust) {
                     fastBow(rust, local);
                     melee(rust, local);
                     instantEoka(rust, local);
-                    //auto grav = getGravityPtr(rust, local);
+                    auto grav = getGravityPtr(rust, local);
                     //grav.write(rust, 1.5);
 
                     using namespace std::literals::chrono_literals;

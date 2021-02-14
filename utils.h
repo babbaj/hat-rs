@@ -144,6 +144,12 @@ inline auto getListData(WinProcess& proc, pointer<List> list) {
     return std::pair<int32_t, pointer<pointer<T>>>{size, arrayPtr};
 }
 
+template<typename List>
+inline auto readList(WinProcess& proc, pointer<List> list) { // returns std::vector<T>
+    auto [num, array] = getListData(proc, list);
+    return array.readArray(proc, num);
+}
+
 // this would be a really cute recursive function
 inline bool is_super(WinProcess& proc, pointer<rust::Il2CppClass_1> super, pointer<rust::Il2CppClass_1> clazz) {
     assert(super != nullptr);

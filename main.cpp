@@ -2,6 +2,7 @@
 #include <cstdio>
 #include <thread>
 #include <chrono>
+#include <optional>
 
 #include "radar.h"
 #include "utils.h"

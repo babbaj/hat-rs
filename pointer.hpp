@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include <cstddef>
 #include <cassert>
 #include <type_traits>
 #include <exception>
@@ -8,9 +9,10 @@
 
 #include "vmread/hlapi/hlapi.h"
 
+using std::size_t;
 
 template<typename T, typename Owner>
-inline constexpr std::ptrdiff_t offset_of(T Owner::*member) {
+inline std::ptrdiff_t offset_of(T Owner::*member) {
     const char storage[sizeof(Owner)]{0};
     auto* obj = reinterpret_cast<const Owner*>(storage);
     return intptr_t(&(obj->*member)) - intptr_t(obj);
@@ -21,6 +23,10 @@ constexpr T member_type_fn(T Owner::*);
 
 template<typename M>
 using member_type = decltype(member_type_fn(std::declval<M>()));
+
+
+template<typename T, typename U>
+concept equal_comparable = std::is_convertible_v<T, U> || std::is_convertible_v<U, T>;
 
 template<typename T>
 struct pointer_base {
@@ -68,6 +74,11 @@ struct pointer : pointer_base<T> {
         proc.Write(this->address + (idx * sizeof(T)), value);
     }
 
+    void writeArray(WinProcess& proc, std::span<const T> array) {
+        nullCheck();
+        proc.Write(this->address, array.data(), sizeof(T) * array.size());
+    }
+
     template<typename U>
     pointer<U> cast() const {
         static_assert(std::is_base_of_v<U, T> || std::is_base_of_v<T, U>);
@@ -81,17 +92,16 @@ struct pointer : pointer_base<T> {
 
     // TODO: implicit conversion operator/constructor for super types
 
-    template<typename U>
+    template<typename U> requires equal_comparable<U, T>
     bool operator==(pointer<U> rhs) {
         return this->address == rhs.address;
     }
 
-    template<typename U>
+    template<typename U> requires equal_comparable<U, T>
     bool operator!=(pointer<U> rhs) {
         return !(*this == rhs);
     }
 
-    // kenzie wouldn't like this :-)
     constexpr bool operator==(std::nullptr_t) {
         return this->address == 0;
     }

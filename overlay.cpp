@@ -239,14 +239,23 @@ std::ostream& operator<<(std::ostream& out, const glm::mat4& matrix) {
     return out;
 }
 
+void getWindowSize(SDL_Window* window, int* w, int* h) {
+    if (window) {
+        SDL_GetWindowSize(window, w, h);
+    } else {
+        *w = 2560;
+        *h = 1440;
+    }
+}
+
 void renderOverlay(EGLDisplay dpy, EGLSurface surface, WinProcess& rust) {
     if (lg_window == nullptr) {
-        std::cerr << "Failed to set window\n";
-        std::terminate();
+        //std::cerr << "Failed to set window\n";
+        //std::terminate();
     }
 
     int width, height;
-    SDL_GetWindowSize(lg_window, &width, &height);
+    getWindowSize(lg_window, &width, &height);
 
     void test();
     //test();
@@ -377,7 +386,7 @@ void main() {
 
 
     int width, height;
-    SDL_GetWindowSize(lg_window, &width, &height);
+    getWindowSize(lg_window, &width, &height);
 
     GLuint buffer; // The ID, kind of a pointer for VRAM
     glGenBuffers(1, &buffer); // Allocate memory for the triangle

@@ -5,7 +5,7 @@
 #include <cassert>
 #include <type_traits>
 #include <exception>
-#include <span>
+//#include <span>
 
 #include "vmread/hlapi/hlapi.h"
 
@@ -74,10 +74,10 @@ struct pointer : pointer_base<T> {
         proc.Write(this->address + (idx * sizeof(T)), value);
     }
 
-    void writeArray(WinProcess& proc, std::span<const T> array) {
+    /*void writeArray(WinProcess& proc, std::span<const T> array) {
         nullCheck();
         proc.Write(this->address, array.data(), sizeof(T) * array.size());
-    }
+    }*/
 
     template<typename U>
     pointer<U> cast() const {

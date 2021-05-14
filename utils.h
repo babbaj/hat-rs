@@ -114,6 +114,7 @@ inline std::vector<player> getVisiblePlayers(WinProcess& proc) {
 inline pointer<rust::BasePlayer_o> getLocalPlayer(WinProcess& proc) {
     auto localPlayerClass = get_class<rust::LocalPlayer_c>(proc);
     if (!localPlayerClass) {
+        puts("trolled");
         return pointer<rust::BasePlayer_o>{nullptr};
     }
 

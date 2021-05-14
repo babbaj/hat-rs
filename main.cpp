@@ -123,8 +123,8 @@ void instantEoka(WinProcess& proc, pointer<rust::BasePlayer_o> player) {
 
 void hack_main(WinProcess& rust) {
     static_assert(alignof(rust::HeldEntity_o) == 8);
-    static_assert(offsetof(rust::BaseProjectile_o, ownerItemUID) == 0x1D0);
-    static_assert(offsetof(rust::BaseProjectile_o, deployDelay) == 0x1D8);
+    //static_assert(offsetof(rust::BaseProjectile_o, ownerItemUID) == 0x1D0);
+    //static_assert(offsetof(rust::BaseProjectile_o, deployDelay) == 0x1D8);
     puts("rust hack :DD");
 
     try {

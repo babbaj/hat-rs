@@ -15,19 +15,6 @@
 #include <glm/mat4x4.hpp>
 #include <glm/ext.hpp>
 
-#include <dlfcn.h>
-
-static SDL_Window* lg_window;
-
-
-extern "C" DECLSPEC SDL_Window *SDLCALL SDL_CreateWindow(const char *title,int x, int y, int w, int h, Uint32 flags) {
-    static auto *createwindow = (decltype(&SDL_CreateWindow)) dlsym(RTLD_NEXT, "SDL_CreateWindow");
-    puts("hooked SDL_CreateWindow");
-    auto* out = createwindow(title, x, y, w, h, flags);
-    lg_window = out;
-    return out;
-}
-
 void printError() {
     auto error = glGetError();
     std::cout << "error = " << error << '\n';
@@ -239,24 +226,11 @@ std::ostream& operator<<(std::ostream& out, const glm::mat4& matrix) {
     return out;
 }
 
-void getWindowSize(SDL_Window* window, int* w, int* h) {
-    if (window) {
-        SDL_GetWindowSize(window, w, h);
-    } else {
-        *w = 2560;
-        *h = 1440;
-    }
+std::pair<int, int> getWindowSize() {
+    return {2560, 1440};
 }
 
-void renderOverlay(EGLDisplay dpy, EGLSurface surface, WinProcess& rust) {
-    if (lg_window == nullptr) {
-        //std::cerr << "Failed to set window\n";
-        //std::terminate();
-    }
-
-    int width, height;
-    getWindowSize(lg_window, &width, &height);
-
+void renderOverlay(WinProcess& rust) {
     void test();
     //test();
     //return;
@@ -383,10 +357,6 @@ void main() {
             0.0, 0.0,
             0.5, 0.5//(float)w, (float)h
     };
-
-
-    int width, height;
-    getWindowSize(lg_window, &width, &height);
 
     GLuint buffer; // The ID, kind of a pointer for VRAM
     glGenBuffers(1, &buffer); // Allocate memory for the triangle

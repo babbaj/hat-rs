@@ -1,6 +1,6 @@
 with import <nixpkgs> {};
 
-llvmPackages_11.stdenv.mkDerivation {
+llvmPackages_12.stdenv.mkDerivation {
   name = "hat-rs";
   nativeBuildInputs = [ cmake ];
 

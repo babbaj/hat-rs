@@ -123,8 +123,6 @@ void instantEoka(WinProcess& proc, pointer<rust::BasePlayer_o> player) {
 
 void hack_main(WinProcess& rust) {
     static_assert(alignof(rust::HeldEntity_o) == 8);
-    //static_assert(offsetof(rust::BaseProjectile_o, ownerItemUID) == 0x1D0);
-    //static_assert(offsetof(rust::BaseProjectile_o, deployDelay) == 0x1D8);
     puts("rust hack :DD");
 
     try {
@@ -137,7 +135,7 @@ void hack_main(WinProcess& rust) {
                 std::cout << "Local player name = " << name << '\n';
                 float health = test.member(_health).read(rust);
                 std::cout << "health = " << health << '\n';
-                auto[x, y, z] = getPosition(rust, test);
+                auto [x, y, z] = getPosition(rust, test);
                 std::cout << "Position = " << x << ", " << y << ", " << z << '\n';
                 auto className = getClassName(rust, test.member(klass).read(rust).address);
                 std::cout << "Player class = " << className << '\n';
@@ -209,10 +207,10 @@ int main() {
 #include <SDL2/SDL_egl.h>
 #include "overlay.h"
 
-static bool initialized = false;
-extern "C" EGLBoolean eglSwapBuffers(EGLDisplay dpy, EGLSurface surface) {
-    static auto *swapbuffers = (decltype(&eglSwapBuffers)) dlsym(RTLD_NEXT, "eglSwapBuffers");
 
+void swapBuffersHook() {
+
+    static bool initialized = false;
     static WinProcess* rust;
     if (!initialized) {
         static auto ctx = WinContext(getPid());
@@ -230,9 +228,44 @@ extern "C" EGLBoolean eglSwapBuffers(EGLDisplay dpy, EGLSurface surface) {
             //std::terminate();
         }
     } else {
-        renderOverlay(dpy, surface, *rust);
+        renderOverlay(*rust);
     }
+}
 
+typedef EGLBoolean (*eglSwapBuffersWithDamageKHR_t)(EGLDisplay dpy,
+        EGLSurface surface, const EGLint *rects, EGLint n_rects);
+
+eglSwapBuffersWithDamageKHR_t khrImpl;
+EGLBoolean hookKHR(EGLDisplay dpy, EGLSurface surface, const EGLint *rects, EGLint n_rects) {
+    swapBuffersHook();
+    return khrImpl(dpy, surface, rects, n_rects);
+}
+
+eglSwapBuffersWithDamageKHR_t extImpl;
+EGLBoolean hookEXT(EGLDisplay dpy, EGLSurface surface, const EGLint *rects, EGLint n_rects) {
+    swapBuffersHook();
+    return extImpl(dpy, surface, rects, n_rects);
+}
+
+extern "C" void (* eglGetProcAddress(char const * procname))(void) {
+    static auto *impl = (decltype(&eglGetProcAddress)) dlsym(RTLD_NEXT, "eglGetProcAddress");
+    const auto proc = impl(procname);
+    if (!proc) return nullptr;
+
+    if (strcmp(procname, "eglSwapBuffersWithDamageKHR") == 0) {
+        khrImpl = reinterpret_cast<eglSwapBuffersWithDamageKHR_t>(proc);
+        return reinterpret_cast<void (*)()>(hookKHR);
+    } else if (strcmp(procname, "eglSwapBuffersWithDamageEXT") == 0) {
+        extImpl = reinterpret_cast<eglSwapBuffersWithDamageKHR_t>(proc);
+        return reinterpret_cast<void (*)()>(hookEXT);
+    } else {
+        return proc;
+    }
+}
+
+extern "C" EGLBoolean eglSwapBuffers(EGLDisplay dpy, EGLSurface surface) {
+    static auto *swapbuffers = (decltype(&eglSwapBuffers)) dlsym(RTLD_NEXT, "eglSwapBuffers");
+    swapBuffersHook();
     return swapbuffers(dpy, surface);
 }
 #endif

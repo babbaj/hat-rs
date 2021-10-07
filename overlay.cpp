@@ -213,13 +213,14 @@ uniform sampler2D texture1;
 
 void main()
 {
-    FragColor = texture(texture1, TexCoord);
+    float sampled = texture(texture1, TexCoord).r;
+    FragColor = vec4(textColor, sampled);
 }
 )";
 
 void setTextUniforms(GLuint program) {
     glUniform1i(glGetUniformLocation(program, "texture1"), 0);
-    constexpr float red[3] = {1.0f, 0.0f, 0.0f};
+    constexpr float red[3] = {1.0f, 1.0f, 0.0f};
     glUniform3fv(glGetUniformLocation(program, "textColor"), 1, &red[0]);
 }
 
@@ -244,10 +245,11 @@ void renderEspText(std::string_view str, float x, float y) {
             stbtt_aligned_quad q;
             stbtt_GetPackedQuad(font.cdata.data(), ATLAS_DIM,ATLAS_DIM, c - 32, &xOff, &yOff, &q, 1);//1=opengl & d3d10+,0=d3d9
 
-            text_vertices.push_back({q.x0,q.y0, 0.0f, q.s0,q.t0}); // top left
-            text_vertices.push_back({q.x1,q.y0, 0.0f, q.s1,q.t0}); // top right
-            text_vertices.push_back({q.x1,q.y1, 0.0f, q.s1,q.t1}); // bottom right
-            text_vertices.push_back({q.x0,q.y1, 0.0f, q.s0,q.t1}); // bottom left
+            // t1 and t0 are supposed to be swapped but that makes it upside down?
+            text_vertices.push_back({q.x0,q.y0, 0.0f, q.s0,q.t1}); // top left
+            text_vertices.push_back({q.x1,q.y0, 0.0f, q.s1,q.t1}); // top right
+            text_vertices.push_back({q.x1,q.y1, 0.0f, q.s1,q.t0}); // bottom right
+            text_vertices.push_back({q.x0,q.y1, 0.0f, q.s0,q.t0}); // bottom left
         }
     }
 
@@ -276,7 +278,7 @@ void renderEspText(std::string_view str, float x, float y) {
     glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(unsigned int) * 3 * text_indices.size(), text_indices.data(), GL_STATIC_DRAW);
 
     const auto proj = glm::ortho(0.0f, 2560.0f, 0.0f, 1440.0f, 0.1f, 100.0f);
-    const glm::mat4 model = glm::translate(glm::mat4(1.0f), glm::vec3(1280.0f, 720.0f, 0.0f));
+    const glm::mat4 model = glm::translate(glm::mat4(1.0f), glm::vec3(1280.0f, 100.0f, 0.0f));
     setMatUniforms(programID, proj, model);
     auto pos = proj * model * glm::vec4{18, -19, 0, 1.0};
 

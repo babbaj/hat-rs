@@ -22,7 +22,6 @@ static std::vector<unsigned char> readFile(const char* path) {
 }
 
 
-
 Font initFont() {
     auto fontData = readFile("arial.ttf");
 
@@ -76,7 +75,7 @@ Font initFont() {
 
     //std::array<uint8_t, ATLAS_DIM * ATLAS_DIM> buffer{};
     //glBindTexture(GL_TEXTURE_2D, texId);
-    //glGetTexImage(GL_TEXTURE_2D, 0, GL_RGB, GL_UNSIGNED_BYTE, buffer.data());
+    //glGetTexImage(GL_TEXTURE_2D, 0, GL_RED, GL_UNSIGNED_BYTE, buffer.data());
     //stbi_write_png("nword.png", ATLAS_DIM, ATLAS_DIM, 1, atlasData.data(), ATLAS_DIM);
 
     //exit(0);

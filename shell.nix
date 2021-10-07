@@ -5,6 +5,6 @@ llvmPackages_12.stdenv.mkDerivation {
   nativeBuildInputs = [ cmake ];
 
   buildInputs = [
-    SDL2 sfml
+    SDL2 sfml stb
   ];
 }

@@ -78,9 +78,9 @@ void antiRecoil(WinProcess& proc, pointer<rust::BasePlayer_o> player) {
     recoil.recoilPitchMax = 0.f;
     recoilPtr.write(proc, recoil);
 
-    //gun->member(aimCone).write(proc, 0.f);
-    //gun->member(aimConePenaltyMax).write(proc, 0.f);
-    //gun->member(NoiseRadius).write(proc, 0.f);
+    gun->member(aimCone).write(proc, 0.f);
+    gun->member(aimConePenaltyMax).write(proc, 0.f);
+    gun->member(NoiseRadius).write(proc, 0.f);
 }
 
 void fatBullets(WinProcess& proc, pointer<rust::BasePlayer_o> player) {
@@ -163,8 +163,8 @@ void hack_main(WinProcess& rust) {
                     fastBow(rust, local);
                     melee(rust, local);
                     instantEoka(rust, local);
-                    auto grav = getGravityPtr(rust, local);
-                    //grav.write(rust, 1.5);
+                    //auto grav = getGravityPtr(rust, local);
+                    //grav.write(rust, 0.1);
 
                     using namespace std::literals::chrono_literals;
                     std::this_thread::sleep_for(10ms);

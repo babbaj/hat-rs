@@ -5,6 +5,7 @@
 
 #include "utils.h"
 #include "overlay.h"
+#include "font.h"
 
 #define GL_GLEXT_PROTOTYPES
 #include <SDL2/SDL_opengl.h>
@@ -17,7 +18,16 @@
 
 void printError() {
     auto error = glGetError();
-    std::cout << "error = " << error << '\n';
+    if (error != GL_NO_ERROR) {
+        std::cout << "error = " << error << std::endl;
+    } else {
+        std::cout << "no error" << std::endl;
+    }
+}
+
+void flushErrors() {
+    GLuint err;
+    while ((err = glGetError()) != GL_NO_ERROR);
 }
 
 GLuint LoadShaders(const char* vertexShaderCode, const char* fragmentShaderCode);
@@ -172,6 +182,120 @@ void renderEsp(const std::vector<std::array<glm::vec2, 4>>& boxes) {
     glDeleteBuffers(1, &buffer);
 }
 
+constexpr const GLchar* textVertexShader = R"(
+#version 330 core
+layout (location = 0) in vec3 aPos;
+layout (location = 1) in vec2 aTexCoord;
+
+out vec2 TexCoord;
+
+uniform mat4 model;
+uniform mat4 projection;
+
+void main()
+{
+    gl_Position = projection * model * vec4(aPos, 1.0);
+    TexCoord = aTexCoord;
+}
+)";
+
+constexpr const GLchar* textFragmentShader = R"(
+#version 330 core
+out vec4 FragColor;
+
+in vec2 TexCoord;
+
+uniform vec3 textColor;
+
+// texture samplers
+uniform sampler2D texture1;
+
+void main()
+{
+    FragColor = texture(texture1, TexCoord);
+}
+)";
+
+void setTextUniforms(GLuint program) {
+    glUniform1i(glGetUniformLocation(program, "texture1"), 0);
+    constexpr float red[3] = {1.0f, 0.0f, 0.0f};
+    glUniform3fv(glGetUniformLocation(program, "textColor"), 1, &red[0]);
+}
+
+void setMatUniforms(GLuint program, const glm::mat4& proj, const glm::mat4& model) {
+    glUniformMatrix4fv(glGetUniformLocation(program, "projection"), 1, GL_FALSE, &proj[0][0]);
+    glUniformMatrix4fv(glGetUniformLocation(program, "model"), 1, GL_FALSE, &model[0][0]);
+}
+
+void renderEspText(std::string_view str, float x, float y) {
+    static Font font = initFont();
+    static GLuint programID = LoadShaders(textVertexShader, textFragmentShader);
+    flushErrors();
+
+    glUseProgram(programID);
+    //printError();
+    setTextUniforms(programID);
+    //std::cout << "uwu" << std::endl;
+    //printError();
+
+    std::vector<std::array<float, 5>> text_vertices;
+    std::vector<std::array<GLuint, 3>> text_indices;
+    float xOff{}, yOff{};
+    for (char c : str) {
+        //if (c >= 32 && c < 128) {
+            stbtt_aligned_quad q;
+            stbtt_GetPackedQuad(font.cdata.data(), 1024,1024, c - 32, &xOff, &yOff, &q, 1);//1=opengl & d3d10+,0=d3d9
+
+            text_vertices.push_back({q.x0,q.y0, 0.0f, q.s0,q.t0}); // top left
+            text_vertices.push_back({q.x1,q.y0, 0.0f, q.s1,q.t0}); // top right
+            text_vertices.push_back({q.x1,q.y1, 0.0f, q.s1,q.t1}); // bottom right
+            text_vertices.push_back({q.x0,q.y1, 0.0f, q.s0,q.t1}); // bottom left
+        //}
+    }
+
+    GLuint vao, vbo, ebo;
+    glGenVertexArrays(1, &vao);
+    glGenBuffers(1, &vbo);
+    glGenBuffers(1, &ebo);
+
+    glBindVertexArray(vao);
+    glBindBuffer(GL_ARRAY_BUFFER, vbo);
+    glBufferData(GL_ARRAY_BUFFER, (sizeof(float) * 5) * text_vertices.size(), text_vertices.data(), GL_DYNAMIC_DRAW);
+    //printError();
+
+    // position attribute
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 5 * sizeof(float), nullptr);
+    glEnableVertexAttribArray(0);
+    // texture coord attribute
+    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void*)(3 * sizeof(float)));
+    glEnableVertexAttribArray(1);
+    //printError();
+
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ebo);
+    for (unsigned int i = 0; i < str.length() * 4; i += 4) {
+        text_indices.push_back({ i, i + 1, i + 2 }); // top left, top right, bottom right
+        text_indices.push_back({ i, i + 2, i + 3 }); // top left, bottom right, bottom left
+    }
+    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(unsigned int) * 3 * text_indices.size(), text_indices.data(), GL_DYNAMIC_DRAW);
+    //printError();
+
+    const auto proj = glm::ortho(0.0f, 2560.0f, 0.0f, 1440.0f, 0.1f, 100.0f) * glm::mat4{};
+    const glm::mat4 model = glm::translate(glm::mat4(1.0f), glm::vec3(1280.0f, 720.0f, 0.0f));
+    setMatUniforms(programID, proj, model);
+    //printError();
+    auto pos = proj * model * glm::vec4{18, -19, 0, 1.0};
+
+
+    glBindTexture(GL_TEXTURE_2D, font.texture);
+    //glActiveTexture(GL_TEXTURE0);
+    glBindVertexArray(vao);
+    //glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ebo);
+    glDrawElements(GL_TRIANGLES, 3 * text_indices.size(), GL_UNSIGNED_INT, nullptr);
+    glBindVertexArray(0);
+    //printError();
+    //exit(1);
+}
+
 std::pair<glm::vec2, glm::vec2> getEspSides(glm::vec2 from, glm::vec2 target, float width) {
     glm::vec2 v = target - from;
 
@@ -234,6 +358,8 @@ void renderOverlay(WinProcess& rust) {
     void test();
     //test();
     //return;
+    test();
+    renderEspText("OWO UWU OWO UWU OWO UWU OWO UWU", 0.5, 0.5);
 
     const auto localPtr = getLocalPlayer(rust);
     if (!localPtr) {
@@ -360,7 +486,7 @@ void main() {
 
     GLuint buffer; // The ID, kind of a pointer for VRAM
     glGenBuffers(1, &buffer); // Allocate memory for the triangle
-    glEnableVertexAttribArray(0);
+
     glBindBuffer(GL_ARRAY_BUFFER, buffer); // Set the buffer as the active array
     glBufferData(GL_ARRAY_BUFFER, sizeof(line), line, GL_STATIC_DRAW); // Fill the buffer with data
     glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 0, nullptr); // Specify how the buffer is converted to vertices

@@ -15,6 +15,7 @@ set(VMREAD_SRC
 add_definitions(-DLMODE=MODE_EXTERNAL)
 
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -g -pthread -march=native -Wall")
+set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -O0")
 
 set(CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/CMake/;${CMAKE_MODULE_PATH}")
 
@@ -26,7 +27,7 @@ add_subdirectory(glm)
 
 include_directories(${SDL2_INCLUDE_DIRS})
 
-set(HACK_SRC main.cpp pointer.hpp csutils.h wrappers.h radar.h radar.cpp utils.h ${VMREAD_SRC})
+set(HACK_SRC main.cpp pointer.hpp csutils.h wrappers.h radar.h radar.cpp utils.h font.cpp font.h ${VMREAD_SRC})
 
 set(HACK_LIBRARY TRUE)
 if (${HACK_LIBRARY})

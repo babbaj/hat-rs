@@ -11,10 +11,8 @@
 
 struct Font {
     stbtt_fontinfo info;
-    std::vector<unsigned char> fileData;
     int atlasW;
     int atlasH;
-    std::vector<uint8_t> atlas;
     std::array<stbtt_packedchar, 96> cdata;
     GLuint texture;
 };

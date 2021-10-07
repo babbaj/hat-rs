@@ -167,6 +167,9 @@ void renderEsp(const std::vector<std::array<glm::vec2, 4>>& boxes) {
     static GLuint programID = LoadShaders(espVertexShader, espFragmentShader);
     glUseProgram(programID);
 
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_ONE, GL_ZERO);
+
     using type = std::decay_t<decltype(boxes)>::value_type;
     GLuint buffer; // The ID
     glGenBuffers(1, &buffer);
@@ -283,32 +286,19 @@ void renderEspText(std::string_view str, float x, float y) {
     auto pos = proj * model * glm::vec4{18, -19, 0, 1.0};
 
     // render it yay
-    glViewport(0, 0, 2560, 1440);
-    //glClearColor(0, 0.5f, 0.6f, 1);
-    //glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-
-    glDisable(GL_CULL_FACE);
-
-    glDepthMask(GL_TRUE);
-    glEnable(GL_DEPTH_TEST);
-    glDepthFunc(GL_LEQUAL);
-
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
     glBindTexture(GL_TEXTURE_2D, font.texture);
-    //glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST_MIPMAP_NEAREST);
-    ////glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST_MIPMAP_NEAREST); // GL_INVALID_ENUM??
-    //glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-    //glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-    //glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAX_ANISOTROPY_EXT, 8);
-    glActiveTexture(GL_TEXTURE0);
     setTextUniforms(programID);
 
-    glBindTexture(GL_TEXTURE_2D, font.texture);
     glBindVertexArray(vao);
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ebo);
     glDrawElements(GL_TRIANGLES, 3 * text_indices.size(), GL_UNSIGNED_INT, nullptr);
+
+    glDeleteVertexArrays(1, &vao);
+    glDeleteBuffers(1, &vbo);
+    glDeleteBuffers(1, &ebo);
 }
 
 std::pair<glm::vec2, glm::vec2> getEspSides(glm::vec2 from, glm::vec2 target, float width) {

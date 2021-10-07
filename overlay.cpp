@@ -214,7 +214,6 @@ uniform sampler2D texture1;
 void main()
 {
     FragColor = texture(texture1, TexCoord);
-    //FragColor = vec4(0.0, TexCoord.y, 0.0, 1.0);
 }
 )";
 
@@ -241,15 +240,15 @@ void renderEspText(std::string_view str, float x, float y) {
     std::vector<std::array<float, 5>> text_vertices;
     float xOff{}, yOff{};
     for (char c : str) {
-        //if (c >= 32 && c < 128) {
+        if (c >= 32 && c < 128) {
             stbtt_aligned_quad q;
-            stbtt_GetPackedQuad(font.cdata.data(), 1024,1024, c - 32, &xOff, &yOff, &q, 1);//1=opengl & d3d10+,0=d3d9
+            stbtt_GetPackedQuad(font.cdata.data(), ATLAS_DIM,ATLAS_DIM, c - 32, &xOff, &yOff, &q, 1);//1=opengl & d3d10+,0=d3d9
 
             text_vertices.push_back({q.x0,q.y0, 0.0f, q.s0,q.t0}); // top left
             text_vertices.push_back({q.x1,q.y0, 0.0f, q.s1,q.t0}); // top right
             text_vertices.push_back({q.x1,q.y1, 0.0f, q.s1,q.t1}); // bottom right
             text_vertices.push_back({q.x0,q.y1, 0.0f, q.s0,q.t1}); // bottom left
-        //}
+        }
     }
 
     GLuint vao, vbo, ebo;
@@ -296,15 +295,13 @@ void renderEspText(std::string_view str, float x, float y) {
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
     glBindTexture(GL_TEXTURE_2D, font.texture);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST_MIPMAP_NEAREST);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST_MIPMAP_NEAREST);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-    glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAX_ANISOTROPY_EXT, 8);
+    //glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST_MIPMAP_NEAREST);
+    ////glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST_MIPMAP_NEAREST); // GL_INVALID_ENUM??
+    //glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    //glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    //glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAX_ANISOTROPY_EXT, 8);
     glActiveTexture(GL_TEXTURE0);
     setTextUniforms(programID);
-
-
 
     glBindTexture(GL_TEXTURE_2D, font.texture);
     glBindVertexArray(vao);

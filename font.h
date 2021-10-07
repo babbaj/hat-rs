@@ -19,13 +19,6 @@ struct Font {
     GLuint texture;
 };
 
-struct SimpleFont {
-    GLuint texture;
-    std::unique_ptr<std::array<stbtt_bakedchar, 96>> cdata;
-};
-
-SimpleFont initFont2();
+constexpr int ATLAS_DIM = 512;
 
 Font initFont();
-
-std::pair<int, int> stringDimensions(std::string_view);

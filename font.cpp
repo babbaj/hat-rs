@@ -64,7 +64,7 @@ Font initFont() {
 
     stbtt_PackEnd(&context);
 
-    std::fill(atlasData.begin(), atlasData.end(), 0x00);
+    std::fill(atlasData.begin(), atlasData.end(), 0xFF);
 
     GLuint texId;
     glGenTextures(1, &texId);

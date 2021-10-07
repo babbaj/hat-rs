@@ -194,7 +194,8 @@ uniform mat4 projection;
 
 void main()
 {
-    gl_Position = projection * model * vec4(aPos, 1.0);
+    vec4 pos = projection * model * vec4(aPos, 1.0);
+    gl_Position = vec4(pos.x, pos.y, 0.0, 1.0);
     TexCoord = aTexCoord;
 }
 )";
@@ -213,6 +214,7 @@ uniform sampler2D texture1;
 void main()
 {
     FragColor = texture(texture1, TexCoord);
+    //FragColor = vec4(0.0, TexCoord.y, 0.0, 1.0);
 }
 )";
 
@@ -233,13 +235,10 @@ void renderEspText(std::string_view str, float x, float y) {
     flushErrors();
 
     glUseProgram(programID);
-    //printError();
-    setTextUniforms(programID);
     //std::cout << "uwu" << std::endl;
     //printError();
 
     std::vector<std::array<float, 5>> text_vertices;
-    std::vector<std::array<GLuint, 3>> text_indices;
     float xOff{}, yOff{};
     for (char c : str) {
         //if (c >= 32 && c < 128) {
@@ -260,8 +259,7 @@ void renderEspText(std::string_view str, float x, float y) {
 
     glBindVertexArray(vao);
     glBindBuffer(GL_ARRAY_BUFFER, vbo);
-    glBufferData(GL_ARRAY_BUFFER, (sizeof(float) * 5) * text_vertices.size(), text_vertices.data(), GL_DYNAMIC_DRAW);
-    //printError();
+    glBufferData(GL_ARRAY_BUFFER, (sizeof(float) * 5) * text_vertices.size(), text_vertices.data(), GL_STATIC_DRAW);
 
     // position attribute
     glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 5 * sizeof(float), nullptr);
@@ -269,31 +267,49 @@ void renderEspText(std::string_view str, float x, float y) {
     // texture coord attribute
     glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void*)(3 * sizeof(float)));
     glEnableVertexAttribArray(1);
-    //printError();
 
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ebo);
+    std::vector<std::array<GLuint, 3>> text_indices;
     for (unsigned int i = 0; i < str.length() * 4; i += 4) {
         text_indices.push_back({ i, i + 1, i + 2 }); // top left, top right, bottom right
         text_indices.push_back({ i, i + 2, i + 3 }); // top left, bottom right, bottom left
     }
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(unsigned int) * 3 * text_indices.size(), text_indices.data(), GL_DYNAMIC_DRAW);
-    //printError();
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ebo);
+    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(unsigned int) * 3 * text_indices.size(), text_indices.data(), GL_STATIC_DRAW);
 
-    const auto proj = glm::ortho(0.0f, 2560.0f, 0.0f, 1440.0f, 0.1f, 100.0f) * glm::mat4{};
+    const auto proj = glm::ortho(0.0f, 2560.0f, 0.0f, 1440.0f, 0.1f, 100.0f);
     const glm::mat4 model = glm::translate(glm::mat4(1.0f), glm::vec3(1280.0f, 720.0f, 0.0f));
     setMatUniforms(programID, proj, model);
-    //printError();
     auto pos = proj * model * glm::vec4{18, -19, 0, 1.0};
+
+    // render it yay
+    glViewport(0, 0, 2560, 1440);
+    //glClearColor(0, 0.5f, 0.6f, 1);
+    //glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+    glDisable(GL_CULL_FACE);
+
+    glDepthMask(GL_TRUE);
+    glEnable(GL_DEPTH_TEST);
+    glDepthFunc(GL_LEQUAL);
+
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
+    glBindTexture(GL_TEXTURE_2D, font.texture);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST_MIPMAP_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST_MIPMAP_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAX_ANISOTROPY_EXT, 8);
+    glActiveTexture(GL_TEXTURE0);
+    setTextUniforms(programID);
+
 
 
     glBindTexture(GL_TEXTURE_2D, font.texture);
-    //glActiveTexture(GL_TEXTURE0);
     glBindVertexArray(vao);
-    //glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ebo);
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ebo);
     glDrawElements(GL_TRIANGLES, 3 * text_indices.size(), GL_UNSIGNED_INT, nullptr);
-    glBindVertexArray(0);
-    //printError();
-    //exit(1);
 }
 
 std::pair<glm::vec2, glm::vec2> getEspSides(glm::vec2 from, glm::vec2 target, float width) {
@@ -358,7 +374,7 @@ void renderOverlay(WinProcess& rust) {
     void test();
     //test();
     //return;
-    test();
+    //test();
     renderEspText("OWO UWU OWO UWU OWO UWU OWO UWU", 0.5, 0.5);
 
     const auto localPtr = getLocalPlayer(rust);

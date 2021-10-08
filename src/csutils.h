@@ -1,7 +1,7 @@
 #pragma once
 
-#include "vmread/hlapi/hlapi.h"
-#include "sdk/il2cpp.h"
+#include "../vmread/hlapi/hlapi.h"
+#include "../sdk/il2cpp.h"
 
 #include <string>
 #include <algorithm>

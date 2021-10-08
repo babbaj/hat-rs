@@ -4,11 +4,11 @@
 
 #include <glm/vec3.hpp>
 #include <glm/vec2.hpp>
-#include "vmread/hlapi/hlapi.h"
-#include "sdk/il2cpp.h"
+#include "../vmread/hlapi/hlapi.h"
+#include "../sdk/il2cpp.h"
 
 #include "csutils.h"
-#include "utils.h"
+//#include "utils.h"
 #include "pointer.hpp"
 
 
@@ -81,21 +81,13 @@ struct player {
     glm::vec3 position;
     glm::vec2 angles; // pitch/yaw
     uint32_t flags; // playerFlags
+    std::optional<std::string> weaponName;
 
     [[nodiscard]] bool isSleeping() const {
         return (this->flags & (int32_t)player_flags::Sleeping) != 0;
     }
 
-    explicit player(WinProcess& proc, pointer<rust::BasePlayer_o> handle_, const rust::BasePlayer_o& player) {
-        this->handle = handle_;
-        this->name = player._displayName ? readString8(proc, player._displayName) : std::string{"player"};
-        this->health = player._health;
-        this->position = getPosition(proc, player.m_CachedPtr);
-
-        auto vec3 = player.input.member(bodyAngles).read(proc);
-        this->angles = glm::vec2{vec3.x, vec3.y};
-        this->flags = player.playerFlags;
-    }
+    explicit player(WinProcess& proc, pointer<rust::BasePlayer_o> handle_, const rust::BasePlayer_o& player);
 
     explicit player(WinProcess& proc, pointer<rust::BasePlayer_o> pPtr): player(proc, pPtr, pPtr.read(proc)) { }
 };

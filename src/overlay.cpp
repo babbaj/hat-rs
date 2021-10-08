@@ -16,6 +16,8 @@
 #include <glm/mat4x4.hpp>
 #include <glm/ext.hpp>
 
+#include <fmt/core.h>
+
 void printError() {
     auto error = glGetError();
     if (error != GL_NO_ERROR) {
@@ -368,14 +370,15 @@ std::optional<std::array<glm::vec2, 4>> getEspBox(glm::vec3 myPos, glm::vec3 pla
     }};
 }
 
+
 EspInfo getEspInfo(const std::array<glm::vec2, 4>& box, const player& local, const player& player) {
     const float w = 2560.0f;
     const float h = 1440.0f;
 
     const float ndcX = box[0].x;
     const float ndcY = box[0].y;
-    const float x = ((w * 0.5f) * ndcX) + ((w * 0.5) + 0);
-    float y = (h / 2.0f) - (0.5f * h * ndcY);
+    const float x = ((w / 2.0f) * ndcX) + (w / 2.0f);
+    const float y = (h / 2.0f) - ((h / 2.0f) * ndcY);
 
     EspString name = {
         .r = 1.0f, .g = 0.0f, .b = 0.0f,
@@ -383,13 +386,14 @@ EspInfo getEspInfo(const std::array<glm::vec2, 4>& box, const player& local, con
     };
     EspString health = {
         .r = 1.0f, .g = 0.0f, .b = 0.0f,
-        .str = std::to_string(player.health) + "hp"
+        .str = fmt::format("{:.1f}hp", player.health)
     };
     auto dist = glm::distance(local.position, player.position);
     EspString distance = {
-            .r = 1.0f, .g = 0.0f, .b = 0.0f,
-            .str = std::to_string(dist) + "m"
+        .r = 1.0f, .g = 0.0f, .b = 0.0f,
+        .str = fmt::format("{:.1f}m", dist)
     };
+    //auto weapon = getHeldWeapon(player.handle);
 
     return {
         .x = x,

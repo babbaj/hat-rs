@@ -7,7 +7,7 @@
 #include <exception>
 //#include <span>
 
-#include "vmread/hlapi/hlapi.h"
+#include "../vmread/hlapi/hlapi.h"
 
 using std::size_t;
 

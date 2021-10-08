@@ -1,5 +1,5 @@
 #pragma once
 
-#include "vmread/hlapi/hlapi.h"
+#include "../vmread/hlapi/hlapi.h"
 
 void runRadar(WinProcess& rust);

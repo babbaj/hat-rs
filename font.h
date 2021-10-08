@@ -19,4 +19,4 @@ struct Font {
 
 constexpr int ATLAS_DIM = 512;
 
-Font initFont();
+Font initFont(int size);

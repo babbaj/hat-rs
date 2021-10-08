@@ -114,7 +114,7 @@ std::optional<glm::vec2> worldToScreen(const glm::mat4& matrix, const glm::vec3&
     glm::vec3 upVec   {matrix[0][1], matrix[1][1], matrix[2][1]};
 
     float w = glm::dot(transVec, worldPos) + matrix[3][3];
-    if (w < 0.098f) return std::nullopt;
+    if ((w != w) || w < 0.098f) return std::nullopt;
     float y = glm::dot(upVec, worldPos) + matrix[3][1];
     float x = glm::dot(rightVec, worldPos) + matrix[3][0];
 
@@ -158,10 +158,6 @@ void main() {
 }
 )";
 
-glm::vec3 toGlm(const vector3& vec) {
-    return glm::vec3(vec.x, vec.y, vec.z);
-}
-
 
 void renderEsp(const std::vector<std::array<glm::vec2, 4>>& boxes) {
     static GLuint programID = LoadShaders(espVertexShader, espFragmentShader);
@@ -187,29 +183,31 @@ void renderEsp(const std::vector<std::array<glm::vec2, 4>>& boxes) {
 
 constexpr const GLchar* textVertexShader = R"(
 #version 330 core
-layout (location = 0) in vec3 aPos;
-layout (location = 1) in vec2 aTexCoord;
+layout (location = 0) in vec2 posIn;
+layout (location = 1) in vec2 texCoordIn;
+layout (location = 2) in vec3 textColorIn;
 
 out vec2 TexCoord;
+out vec3 TextColor;
 
-uniform mat4 model;
 uniform mat4 projection;
 
 void main()
 {
-    vec4 pos = projection * model * vec4(aPos, 1.0);
+    vec4 pos = projection * vec4(posIn, 0.0, 1.0);
     gl_Position = vec4(pos.x, pos.y, 0.0, 1.0);
-    TexCoord = aTexCoord;
+    TexCoord = texCoordIn;
+    TextColor = textColorIn;
 }
 )";
 
 constexpr const GLchar* textFragmentShader = R"(
 #version 330 core
+
 out vec4 FragColor;
 
 in vec2 TexCoord;
-
-uniform vec3 textColor;
+in vec3 TextColor;
 
 // texture samplers
 uniform sampler2D texture1;
@@ -217,44 +215,22 @@ uniform sampler2D texture1;
 void main()
 {
     float sampled = texture(texture1, TexCoord).r;
-    FragColor = vec4(textColor, sampled);
+    FragColor = vec4(TextColor, sampled);
 }
 )";
 
 void setTextUniforms(GLuint program) {
     glUniform1i(glGetUniformLocation(program, "texture1"), 0);
-    constexpr float red[3] = {1.0f, 1.0f, 0.0f};
-    glUniform3fv(glGetUniformLocation(program, "textColor"), 1, &red[0]);
 }
 
-void setMatUniforms(GLuint program, const glm::mat4& proj, const glm::mat4& model) {
+void setMatUniforms(GLuint program, const glm::mat4& proj) {
     glUniformMatrix4fv(glGetUniformLocation(program, "projection"), 1, GL_FALSE, &proj[0][0]);
-    glUniformMatrix4fv(glGetUniformLocation(program, "model"), 1, GL_FALSE, &model[0][0]);
 }
 
-void renderEspText(std::string_view str, float x, float y) {
-    static Font font = initFont();
+void renderText(const Font& font, const std::vector<std::array<float, 7>>& text_vertices, const std::vector<std::array<GLuint, 3>>& text_indices) {
     static GLuint programID = LoadShaders(textVertexShader, textFragmentShader);
     flushErrors();
-
     glUseProgram(programID);
-    //std::cout << "uwu" << std::endl;
-    //printError();
-
-    std::vector<std::array<float, 5>> text_vertices;
-    float xOff{}, yOff{};
-    for (char c : str) {
-        if (c >= 32 && c < 128) {
-            stbtt_aligned_quad q;
-            stbtt_GetPackedQuad(font.cdata.data(), ATLAS_DIM,ATLAS_DIM, c - 32, &xOff, &yOff, &q, 1);//1=opengl & d3d10+,0=d3d9
-
-            // t1 and t0 are supposed to be swapped but that makes it upside down?
-            text_vertices.push_back({q.x0,q.y0, 0.0f, q.s0,q.t1}); // top left
-            text_vertices.push_back({q.x1,q.y0, 0.0f, q.s1,q.t1}); // top right
-            text_vertices.push_back({q.x1,q.y1, 0.0f, q.s1,q.t0}); // bottom right
-            text_vertices.push_back({q.x0,q.y1, 0.0f, q.s0,q.t0}); // bottom left
-        }
-    }
 
     GLuint vao, vbo, ebo;
     glGenVertexArrays(1, &vao);
@@ -263,27 +239,24 @@ void renderEspText(std::string_view str, float x, float y) {
 
     glBindVertexArray(vao);
     glBindBuffer(GL_ARRAY_BUFFER, vbo);
-    glBufferData(GL_ARRAY_BUFFER, (sizeof(float) * 5) * text_vertices.size(), text_vertices.data(), GL_STATIC_DRAW);
+    glBufferData(GL_ARRAY_BUFFER, (sizeof(float) * 7) * text_vertices.size(), text_vertices.data(), GL_DYNAMIC_DRAW);
 
     // position attribute
-    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 5 * sizeof(float), nullptr);
+    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 7 * sizeof(float), nullptr);
     glEnableVertexAttribArray(0);
     // texture coord attribute
-    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void*)(3 * sizeof(float)));
+    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 7 * sizeof(float), (void*)(2 * sizeof(float)));
     glEnableVertexAttribArray(1);
+    // color attribute
+    glVertexAttribPointer(2, 3, GL_FLOAT, GL_FALSE, 7 * sizeof(float), (void*)(4 * sizeof(float)));
+    glEnableVertexAttribArray(2);
 
-    std::vector<std::array<GLuint, 3>> text_indices;
-    for (unsigned int i = 0; i < str.length() * 4; i += 4) {
-        text_indices.push_back({ i, i + 1, i + 2 }); // top left, top right, bottom right
-        text_indices.push_back({ i, i + 2, i + 3 }); // top left, bottom right, bottom left
-    }
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ebo);
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(unsigned int) * 3 * text_indices.size(), text_indices.data(), GL_STATIC_DRAW);
+    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(unsigned int) * 3 * text_indices.size(), text_indices.data(), GL_DYNAMIC_DRAW);
 
-    const auto proj = glm::ortho(0.0f, 2560.0f, 0.0f, 1440.0f, 0.1f, 100.0f);
-    const glm::mat4 model = glm::translate(glm::mat4(1.0f), glm::vec3(1280.0f, 100.0f, 0.0f));
-    setMatUniforms(programID, proj, model);
-    auto pos = proj * model * glm::vec4{18, -19, 0, 1.0};
+    // top left origin
+    const auto proj = glm::ortho(0.0f, 2560.0f, 1440.0f, 0.0f, 0.1f, 100.0f);
+    setMatUniforms(programID, proj);
 
     // render it yay
     glEnable(GL_BLEND);
@@ -299,6 +272,60 @@ void renderEspText(std::string_view str, float x, float y) {
     glDeleteVertexArrays(1, &vao);
     glDeleteBuffers(1, &vbo);
     glDeleteBuffers(1, &ebo);
+}
+
+struct EspString {
+    float r, g, b;
+    std::string str;
+};
+struct EspInfo {
+    float x, y; // screen space coords
+    std::vector<EspString> lines;
+};
+
+void renderEspText(const std::vector<EspInfo>& sections) {
+    static Font font = initFont(15);
+
+    std::vector<std::array<float, 7>> text_vertices; // x/y, textureX/textureY, r/g/b
+    std::vector<std::array<GLuint, 3>> text_indices;
+
+    unsigned int i = 0;
+    for (const auto& section : sections) {
+        float yOff = section.y + 15; // origin of text is the top left so start with is shifted down
+        for (const auto& line : section.lines) {
+            float xOff = section.x;
+            const float left = xOff;
+            float right = left;
+            float bottom = yOff;
+            std::vector<std::array<float, 7>> lineVertices;
+
+            for (char cIn : line.str) {
+                const char c = (cIn >= 32 && cIn < 128) ? cIn : '?';
+                stbtt_aligned_quad q;
+                stbtt_GetPackedQuad(font.cdata.data(), ATLAS_DIM, ATLAS_DIM, c - 32, &xOff, &yOff, &q, 0);
+                right = q.x1;
+                bottom = std::max(q.y1, bottom);
+
+                const auto r = line.r, g = line.g, b = line.b;
+                lineVertices.push_back({q.x0,q.y0, q.s0,q.t0,  r, g, b}); // top left
+                lineVertices.push_back({q.x1,q.y0, q.s1,q.t0,  r, g, b}); // top right
+                lineVertices.push_back({q.x1,q.y1, q.s1,q.t1,  r, g, b}); // bottom right
+                lineVertices.push_back({q.x0,q.y1, q.s0,q.t1,  r, g, b}); // bottom left
+            }
+            // TODO: this is where centering logic needs to happen
+            text_vertices.insert(text_vertices.end(), lineVertices.begin(), lineVertices.end());
+
+            yOff += 15; // TODO: calculate this
+
+            const unsigned int iEnd = i + line.str.length() * 4;
+            for (; i < iEnd; i += 4) {
+                text_indices.push_back({ i, i + 1, i + 2 }); // top left, top right, bottom right
+                text_indices.push_back({ i, i + 2, i + 3 }); // top left, bottom right, bottom left
+            }
+        }
+    }
+
+    renderText(font, text_vertices, text_indices);
 }
 
 std::pair<glm::vec2, glm::vec2> getEspSides(glm::vec2 from, glm::vec2 target, float width) {
@@ -341,6 +368,40 @@ std::optional<std::array<glm::vec2, 4>> getEspBox(glm::vec3 myPos, glm::vec3 pla
     }};
 }
 
+EspInfo getEspInfo(const std::array<glm::vec2, 4>& box, const player& local, const player& player) {
+    const float w = 2560.0f;
+    const float h = 1440.0f;
+
+    const float ndcX = box[0].x;
+    const float ndcY = box[0].y;
+    const float x = ((w * 0.5f) * ndcX) + ((w * 0.5) + 0);
+    float y = (h / 2.0f) - (0.5f * h * ndcY);
+
+    EspString name = {
+        .r = 1.0f, .g = 0.0f, .b = 0.0f,
+        .str = player.name
+    };
+    EspString health = {
+        .r = 1.0f, .g = 0.0f, .b = 0.0f,
+        .str = std::to_string(player.health) + "hp"
+    };
+    auto dist = glm::distance(local.position, player.position);
+    EspString distance = {
+            .r = 1.0f, .g = 0.0f, .b = 0.0f,
+            .str = std::to_string(dist) + "m"
+    };
+
+    return {
+        .x = x,
+        .y = y,
+        .lines = {
+            name,
+            health,
+            distance
+        }
+    };
+}
+
 std::ostream& operator<<(std::ostream& out, const glm::mat4& matrix) {
     out << '[';
     for (int i = 0; i < 4; i++) {
@@ -361,10 +422,30 @@ std::pair<int, int> getWindowSize() {
 
 void renderOverlay(WinProcess& rust) {
     void test();
-    //test();
-    //return;
-    //test();
-    renderEspText("OWO UWU OWO UWU OWO UWU OWO UWU", 0.5, 0.5);
+
+    /*std::vector<EspInfo> text = {
+        {
+            .x = 500,
+            .y = 500,
+            .lines = {
+                {
+                    .r = 1.0f,
+                    .g = 0.0f,
+                    .b = 0.0f,
+                    .str = "OWO UWU OWO UWU"
+                },
+                {
+                    .r = 0.0f,
+                    .g = 1.0f,
+                    .b = 0.0f,
+                    .str = "Trans Rights"
+                }
+            }
+        }
+    };
+
+    renderEspText(text);
+    return;*/
 
     const auto localPtr = getLocalPlayer(rust);
     if (!localPtr) {
@@ -374,25 +455,27 @@ void renderOverlay(WinProcess& rust) {
     if (players.empty()) {
         return;
     }
-    std::vector<std::array<glm::vec2, 4>> espBoxes;
+
     const player local = player{rust, localPtr};
-    const glm::vec3 headPos = glm::vec3(local.position.x, local.position.y + 1.6f, local.position.z); // TODO: get head bone posiiton
+    const glm::vec3 headPos = glm::vec3(local.position.x, local.position.y + 1.6f, local.position.z); // TODO: get head bone position
     // ConVar_Graphics_StaticFields::_fov
     //glm::mat4 viewMatrix = getViewMatrix(headPos, local.angles.x, local.angles.y, 90.0f);
     glm::mat4 viewMatrix = getViewMatrix0(rust);
 
-    //std::cout << viewMatrix << '\n';
+    std::vector<std::array<glm::vec2, 4>> espBoxes;
+    std::vector<EspInfo> espText;
     for (const auto& player : players) {
         // TODO: filter local player
-        auto pos = toGlm(player.position);
+        auto pos = player.position;
         std::optional bpx = getEspBox(headPos, pos, viewMatrix);
         if (bpx) {
+            espText.push_back(getEspInfo(*bpx, local, player));
             espBoxes.push_back(*bpx);
         }
     }
 
-    //std::cout << espBoxes.size() << " visible players\n";
     renderEsp(espBoxes);
+    renderEspText(espText);
 
     /*renderEsp({
             {glm::vec2{0.0f, 0.0f}, glm::vec2{0.0f, 0.2f}, glm::vec2{0.2f, 0.2f}, glm::vec2{0.2f, 0.0f}},
@@ -401,13 +484,25 @@ void renderOverlay(WinProcess& rust) {
 }
 
 
-void checkError(GLuint id) {
+void checkShaderError(GLuint id) {
     int infoLogLength = 0;
     glGetShaderiv(id, GL_INFO_LOG_LENGTH, &infoLogLength);
     if (infoLogLength) {
         std::string errorMessage(infoLogLength, '\0');
         glGetShaderInfoLog(id, infoLogLength, nullptr, errorMessage.data());
-        std::cout << errorMessage << '\n';
+        std::cout << errorMessage << std::endl;
+        exit(1);
+    }
+}
+
+void checkProgramError(GLuint id) {
+    int infoLogLength = 0;
+    glGetProgramiv(id, GL_INFO_LOG_LENGTH, &infoLogLength);
+    if (infoLogLength) {
+        std::string errorMessage(infoLogLength, '\0');
+        glGetProgramInfoLog(id, infoLogLength, nullptr, errorMessage.data());
+        std::cout << errorMessage << std::endl;
+        exit(1);
     }
 }
 
@@ -426,7 +521,10 @@ GLuint LoadShaders(const char* vertexShaderCode, const char* fragmentShaderCode)
 
     // Check Vertex Shader
     glGetShaderiv(VertexShaderID, GL_COMPILE_STATUS, &Result);
-    checkError(VertexShaderID);
+    if (!Result) {
+        std::cout << "vertex shader error" << std::endl;
+        checkShaderError(VertexShaderID);
+    }
 
     // Compile Fragment Shader
     puts("Compiling fragment shader");
@@ -435,7 +533,11 @@ GLuint LoadShaders(const char* vertexShaderCode, const char* fragmentShaderCode)
 
     // Check Fragment Shader
     glGetShaderiv(FragmentShaderID, GL_COMPILE_STATUS, &Result);
-    checkError(FragmentShaderID);
+    if (!Result) {
+        std::cout << "fragment shader error" << std::endl;
+        checkShaderError(FragmentShaderID);
+    }
+
 
     // Link the program
     printf("Linking program\n");
@@ -446,7 +548,10 @@ GLuint LoadShaders(const char* vertexShaderCode, const char* fragmentShaderCode)
 
     // Check the program
     glGetProgramiv(ProgramID, GL_LINK_STATUS, &Result);
-    checkError(ProgramID);
+    if (!Result) {
+        std::cout << "link error?" << std::endl;
+        checkProgramError(ProgramID);
+    }
 
     glDetachShader(ProgramID, VertexShaderID);
     glDetachShader(ProgramID, FragmentShaderID);

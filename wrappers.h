@@ -2,11 +2,15 @@
 
 #include <string>
 
+#include <glm/vec3.hpp>
+#include <glm/vec2.hpp>
 #include "vmread/hlapi/hlapi.h"
 #include "sdk/il2cpp.h"
+
 #include "csutils.h"
 #include "utils.h"
 #include "pointer.hpp"
+
 
 enum class player_flags: int32_t {
     Unused1 = 1,
@@ -53,15 +57,8 @@ enum class item_category : int {
     Fun = 17
 };
 
-struct vector3 {
-    float x, y, z;
-};
 
-struct vector2 {
-    float x, y;
-};
-
-inline vector3 getPosition(WinProcess& proc, uint64_t m_cachedPtr) {
+inline glm::vec3 getPosition(WinProcess& proc, uint64_t m_cachedPtr) {
     // https://www.unknowncheats.me/forum/2562206-post1402.html
     // https://github.com/Dualisc/MalkovaEXTERNAL/blob/master/main.cc#L1079
     auto localPlayer  = proc.Read<uint64_t>(m_cachedPtr + 0x30);
@@ -69,10 +66,10 @@ inline vector3 getPosition(WinProcess& proc, uint64_t m_cachedPtr) {
     auto localT = proc.Read<uint64_t>(localOC + 0x8);
     auto localVS  = proc.Read<uint64_t>(localT + 0x38);
 
-    return proc.Read<vector3>(localVS  + 0x90);
+    return proc.Read<glm::vec3>(localVS  + 0x90);
 }
 
-inline vector3 getPosition(WinProcess& proc, pointer<rust::BasePlayer_o> player) {
+inline glm::vec3 getPosition(WinProcess& proc, pointer<rust::BasePlayer_o> player) {
     const uint64_t ptr = player.member(m_CachedPtr).read(proc);
     return getPosition(proc, ptr);
 }
@@ -81,8 +78,8 @@ struct player {
     pointer<rust::BasePlayer_o> handle;
     std::string name;
     float health;
-    vector3 position;
-    vector2 angles; // pitch/yaw
+    glm::vec3 position;
+    glm::vec2 angles; // pitch/yaw
     uint32_t flags; // playerFlags
 
     [[nodiscard]] bool isSleeping() const {
@@ -96,7 +93,7 @@ struct player {
         this->position = getPosition(proc, player.m_CachedPtr);
 
         auto vec3 = player.input.member(bodyAngles).read(proc);
-        this->angles = vector2{vec3.x, vec3.y};
+        this->angles = glm::vec2{vec3.x, vec3.y};
         this->flags = player.playerFlags;
     }
 

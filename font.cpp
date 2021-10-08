@@ -22,7 +22,7 @@ static std::vector<unsigned char> readFile(const char* path) {
 }
 
 
-Font initFont() {
+Font initFont(int size) {
     auto fontData = readFile("arial.ttf");
 
     stbtt_fontinfo info;
@@ -41,16 +41,14 @@ Font initFont() {
     }
 
     stbtt_PackSetOversampling(&context, 2, 2); // oversample x/y
-    if (!stbtt_PackFontRange(&context, fontData.data(), 0, 40, ' ', 96, cdata.data())) {
+    if (!stbtt_PackFontRange(&context, fontData.data(), 0, size, ' ', 96, cdata.data())) {
         std::cerr << "Failed to pack font" << std::endl;
         exit(1);
     }
 
     stbtt_PackEnd(&context);
 
-    //std::fill(atlasData.begin(), atlasData.end(), 0xFF);
     stbi_write_png("out.png", ATLAS_DIM, ATLAS_DIM, 1, atlasData.data(), ATLAS_DIM);
-
 
     void printError();
     printError();

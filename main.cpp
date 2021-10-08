@@ -135,8 +135,8 @@ void hack_main(WinProcess& rust) {
                 std::cout << "Local player name = " << name << '\n';
                 float health = test.member(_health).read(rust);
                 std::cout << "health = " << health << '\n';
-                auto [x, y, z] = getPosition(rust, test);
-                std::cout << "Position = " << x << ", " << y << ", " << z << '\n';
+                auto pos = getPosition(rust, test);
+                std::cout << "Position = " << pos.x << ", " << pos.y << ", " << pos.z << '\n';
                 auto className = getClassName(rust, test.member(klass).read(rust).address);
                 std::cout << "Player class = " << className << '\n';
                 auto players = getVisiblePlayers(rust);

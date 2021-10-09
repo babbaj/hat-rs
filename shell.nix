@@ -5,6 +5,6 @@ llvmPackages_12.stdenv.mkDerivation {
   nativeBuildInputs = [ cmake pkg-config ];
 
   buildInputs = [
-    SDL2 sfml stb fmt
+    SDL2 sfml stb fmt glm
   ];
 }

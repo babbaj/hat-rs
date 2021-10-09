@@ -1,9 +1,6 @@
 [submodule "vmread"]
 	path = vmread
 	url = https://github.com/h33p/vmread/
-[submodule "glm"]
-	path = glm
-	url = https://github.com/g-truc/glm
 [submodule "sdk"]
 	path = sdk
 	url = git@github.com:babbaj/rust-header.git

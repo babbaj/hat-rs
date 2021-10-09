@@ -24,7 +24,6 @@ constexpr T member_type_fn(T Owner::*);
 template<typename M>
 using member_type = decltype(member_type_fn(std::declval<M>()));
 
-
 template<typename T, typename U>
 concept equal_comparable = std::is_convertible_v<T, U> || std::is_convertible_v<U, T>;
 
@@ -152,23 +151,6 @@ template<>
 struct pointer<const void> : pointer_base<const void> {
     using pointer_base<const void>::pointer_base;
 };
-
-template<typename T, typename S = T, typename M>
-[[deprecated]] M readMember(WinProcess& proc, const pointer<T> ptr, M S::* member) {
-    static_assert(std::is_base_of_v<S, T>);
-    return proc.Read<M>(ptr.address + offset_of(member));
-}
-
-template<typename T, typename S = T, typename M>
-[[deprecated]] void writeMember(WinProcess& proc, const pointer<T> ptr, M S::* member, const M& value) {
-    static_assert(std::is_base_of_v<S, T>);
-    proc.Write(ptr.address + offset_of(member), value);
-}
-
-template<typename T, typename M>
-[[deprecated]] pointer<M> member0(pointer<T> ptr, M T::* member) {
-    return pointer<M>{ptr.address + offset_of(member)};
-}
 
 static_assert(sizeof(pointer<void>) == sizeof(void*));
 static_assert(sizeof(pointer<int>) == sizeof(int*));

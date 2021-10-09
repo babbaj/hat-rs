@@ -10,7 +10,7 @@ set(VMREAD_SRC
         vmread/pmparser.c
         vmread/hlapi/windll.cpp
         vmread/hlapi/winprocess.cpp
-        vmread/hlapi/winprocesslist.cpp src/wrappers.h src/radar.h src/radar.cpp src/utils.h src/utils.cpp)
+        vmread/hlapi/winprocesslist.cpp)
 
 add_definitions(-DLMODE=MODE_EXTERNAL)
 

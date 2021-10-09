@@ -1,4 +1,5 @@
 #include "wrappers.h"
+#include "utils.h"
 
 player::player(WinProcess& proc, pointer<rust::BasePlayer_o> handle_, const rust::BasePlayer_o& player) {
     this->handle = handle_;
@@ -10,5 +11,12 @@ player::player(WinProcess& proc, pointer<rust::BasePlayer_o> handle_, const rust
     this->angles = glm::vec2{vec3.x, vec3.y};
     this->flags = player.playerFlags;
 
-    //auto weapon = getHeldWeapon(proc, handle_);
+    std::optional item = getHeldItem(proc, handle_);
+    if (item) {
+        auto def = item->member(info).read(proc);
+        auto itemName = def.member(shortname).read(proc); // TODO: get display name
+        if (itemName) {
+            this->weaponName = readString8(proc, itemName);
+        }
+    }
 }

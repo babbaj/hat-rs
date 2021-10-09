@@ -393,16 +393,24 @@ EspInfo getEspInfo(const std::array<glm::vec2, 4>& box, const player& local, con
         .r = 1.0f, .g = 0.0f, .b = 0.0f,
         .str = fmt::format("{:.1f}m", dist)
     };
-    //auto weapon = getHeldWeapon(player.handle);
+    auto weaponName = player.weaponName ? *player.weaponName : "";
+    EspString weapon = {
+            .r = 1.0f, .g = 0.0f, .b = 0.0f,
+            .str = weaponName
+    };
+    std::vector<EspString> lines = {
+            std::move(name),
+            std::move(health),
+            std::move(distance)
+    };
+    if (player.weaponName) {
+        lines.push_back(std::move(weapon));
+    }
 
     return {
         .x = x,
         .y = y,
-        .lines = {
-            name,
-            health,
-            distance
-        }
+        .lines = std::move(lines)
     };
 }
 

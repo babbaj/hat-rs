@@ -27,6 +27,15 @@ using member_type = decltype(member_type_fn(std::declval<M>()));
 template<typename T, typename U>
 concept equal_comparable = std::is_convertible_v<T, U> || std::is_convertible_v<U, T>;
 
+template<typename T, typename U>
+constexpr bool similar = sizeof(T) == sizeof(U) && alignof(T) == alignof(U);
+template<typename T, typename U> requires (std::same_as<T, void> || std::same_as<U, void>)
+constexpr bool similar<T, U> = true;
+
+
+template<typename>
+struct pointer;
+
 template<typename T>
 struct pointer_base {
     using type = T;
@@ -39,6 +48,16 @@ struct pointer_base {
 
     T* as_raw() {
         return reinterpret_cast<T*>(address);
+    }
+
+    template<typename U> requires similar<T, U>
+    pointer<U> as() {
+        return pointer<U>{this->address};
+    }
+
+    template<typename U>
+    pointer<U> as_unchecked() {
+        return pointer<U>{this->address};
     }
 
     explicit operator bool() const {
@@ -55,7 +74,6 @@ struct pointer : pointer_base<T> {
     }
 
     T read(WinProcess& proc, size_t idx = 0) const {
-        //assert(this->address);
         nullCheck();
         return proc.Read<T>(this->address + (idx * sizeof(T)));
     }
@@ -68,7 +86,6 @@ struct pointer : pointer_base<T> {
     }
 
     void write(WinProcess& proc, const T& value, size_t idx = 0) {
-        //assert(this->address);
         nullCheck();
         proc.Write(this->address + (idx * sizeof(T)), value);
     }

@@ -14,9 +14,13 @@ player::player(WinProcess& proc, pointer<rust::BasePlayer_o> handle_, const rust
     std::optional item = getHeldItem(proc, handle_);
     if (item) {
         auto def = item->member(info).read(proc);
-        auto itemName = def.member(shortname).read(proc); // TODO: get display name
-        if (itemName) {
-            this->weaponName = readString8(proc, itemName);
-        }
+        /*auto translate = def.member(displayName).read(proc);
+        if (translate) {
+            auto english = translate.member(english).read(proc);
+            auto name = readString8(proc, english);
+            this->weaponName = std::move(name);
+        }*/
+        auto itemName = def.member(shortname).read(proc);
+        this->weaponName = readString8(proc, itemName);
     }
 }

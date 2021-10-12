@@ -11,10 +11,12 @@
 #include <SDL2/SDL_opengl.h>
 #include <SDL2/SDL.h>
 
+#define GLM_ENABLE_EXPERIMENTAL
 #include <glm/vec3.hpp>
 #include <glm/vec2.hpp>
 #include <glm/mat4x4.hpp>
 #include <glm/ext.hpp>
+#include <glm/gtx/perpendicular.hpp>
 
 #include <fmt/core.h>
 
@@ -125,16 +127,6 @@ std::optional<glm::vec2> worldToScreen(const glm::mat4& matrix, const glm::vec3&
 }
 
 constexpr const char* espVertexShader =
-/*R"(
-#version 330 core
-
-layout(location = 0) in vec2 pos;
-
-void main() {
-    gl_Position.xyz = vec3(pos, 0.0);
-    gl_Position.w = 1.0;
-}
-)";*/
 R"(
 #version 320 es
 
@@ -144,8 +136,7 @@ layout(std430, binding = 0) readonly buffer Boxes {
 
 void main() {
     vec2 pos = vertices[gl_InstanceID][gl_VertexID];
-    gl_Position.xyz = vec3(pos, 0.0);
-    gl_Position.w = 1.0;
+    gl_Position = vec4(pos, 0.0, 1.0);
 }
 )";
 
@@ -171,12 +162,10 @@ void renderEsp(const std::vector<std::array<glm::vec2, 4>>& boxes) {
     using type = std::decay_t<decltype(boxes)>::value_type;
     GLuint buffer; // The ID
     glGenBuffers(1, &buffer);
-    //glEnableVertexAttribArray(0);
     glBindBuffer(GL_SHADER_STORAGE_BUFFER, buffer); // Set the buffer as the active array
-    glBufferData(GL_SHADER_STORAGE_BUFFER, boxes.size() * sizeof(type), boxes.data(), GL_STATIC_DRAW);
+    glBufferData(GL_SHADER_STORAGE_BUFFER, boxes.size() * sizeof(type), boxes.data(), GL_DYNAMIC_DRAW);
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, buffer);
     glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0); // unbind
-    //glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 0, nullptr); // 2 floats per vertex
     glDrawArraysInstanced(GL_LINE_LOOP, 0, 4, boxes.size());
 
     //glDisableVertexAttribArray(0);
@@ -256,7 +245,7 @@ void renderText(const Font& font, const std::vector<std::array<float, 7>>& text_
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ebo);
     glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(unsigned int) * 3 * text_indices.size(), text_indices.data(), GL_DYNAMIC_DRAW);
 
-    // top left origin
+    // top left origin because that's how stb_truetype works
     const auto proj = glm::ortho(0.0f, 2560.0f, 1440.0f, 0.0f, 0.1f, 100.0f);
     setMatUniforms(programID, proj);
 
@@ -333,16 +322,15 @@ void renderEspText(const std::vector<EspInfo>& sections) {
 std::pair<glm::vec2, glm::vec2> getEspSides(glm::vec2 from, glm::vec2 target, float width) {
     glm::vec2 v = target - from;
 
-    float dist = glm::sqrt(v.x * v.x + v.y * v.y);
-    v = v / dist; // length of v is now 1
-    v = v * (width / 2); // length of v is now width/2
+    v = glm::normalize(v); // length of v is now 1
+    v *= (width / 2); // length of v is now width/2
 
     glm::vec2 leftV = glm::vec2(-v.y, v.x);
     glm::vec2 rightV = glm::vec2(v.y, -v.x);
 
     return {
-      glm::vec2(target.x + leftV.x, target.y + leftV.y),
-      glm::vec2(target.x + rightV.x, target.y + rightV.y)
+        target + leftV,
+        target + rightV
     };
 }
 
@@ -361,7 +349,6 @@ std::optional<std::array<glm::vec2, 4>> getEspBox(glm::vec3 myPos, glm::vec3 pla
 
     if (!topL || !topR || !bottomL || !bottomR) return std::nullopt;
 
-    //constexpr float width = 0.04;
     return {{
         *bottomL, // bottom left
         *bottomR, // bottom right

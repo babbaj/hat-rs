@@ -64,6 +64,15 @@ void Normalize(float& Yaw, float& Pitch) {
     else if (Yaw > 360) Yaw -= 360;
 }
 
+void setNoRecoil(WinProcess& proc, pointer<rust::RecoilProperties_o> recoilPtr) {
+    rust::RecoilProperties_o recoil = recoilPtr.read(proc);
+    recoil.recoilYawMin   = 0.f;
+    recoil.recoilYawMax   = 0.f;
+    recoil.recoilPitchMin = 0.f;
+    recoil.recoilPitchMax = 0.f;
+    recoilPtr.write(proc, recoil);
+}
+
 void antiRecoil(WinProcess& proc, pointer<rust::BasePlayer_o> player) {
     std::optional gun = getHeldWeapon(proc, player);
     if (!gun) return;
@@ -71,12 +80,7 @@ void antiRecoil(WinProcess& proc, pointer<rust::BasePlayer_o> player) {
     pointer recoilPtr = gun->member(recoil).read(proc);
     if (!recoilPtr) return;
 
-    rust::RecoilProperties_o recoil = recoilPtr.read(proc);
-    recoil.recoilYawMin   = 0.f;
-    recoil.recoilYawMax   = 0.f;
-    recoil.recoilPitchMin = 0.f;
-    recoil.recoilPitchMax = 0.f;
-    recoilPtr.write(proc, recoil);
+    setNoRecoil(proc, recoilPtr);
 
     gun->member(aimCone).write(proc, 0.f);
     gun->member(aimConePenaltyMax).write(proc, 0.f);
@@ -119,6 +123,7 @@ void instantEoka(WinProcess& proc, pointer<rust::BasePlayer_o> player) {
     std::optional eoka = getHeldT<rust::FlintStrikeWeapon_o, rust::FlintStrikeWeapon_c>(proc, player);
     if (!eoka) return;
     eoka->member(successFraction).write(proc, 1.f);
+    setNoRecoil(proc, eoka->member(strikeRecoil).read(proc));
 }
 
 void hack_main(WinProcess& rust) {

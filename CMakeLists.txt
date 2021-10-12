@@ -20,7 +20,7 @@ set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -O0")
 find_package(PkgConfig REQUIRED)
 find_package(SDL2 REQUIRED)
 find_package(glm REQUIRED)
-find_package(SFML REQUIRED system window graphics network audio)
+find_package(SFML 2.5 COMPONENTS graphics REQUIRED)
 pkg_check_modules(FMT REQUIRED IMPORTED_TARGET fmt)
 
 file(GLOB_RECURSE HACK_SRC src/*)
@@ -35,7 +35,7 @@ else()
     add_executable(rust_hack ${SRC})
 endif()
 
-target_link_libraries(rust_hack glm::glm PkgConfig::FMT ${SDL2_LIBRARIES} ${SFML_LIBRARIES} ${SFML_DEPENDENCIES})
+target_link_libraries(rust_hack glm::glm PkgConfig::FMT ${SDL2_LIBRARIES} sfml-graphics)
 target_include_directories(rust_hack PRIVATE ${SDL2_INCLUDE_DIRS})
 
 target_include_directories(rust_hack PRIVATE pointer/)

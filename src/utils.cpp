@@ -39,9 +39,18 @@ uint64_t scan_for_class(WinProcess& proc, WinDll& gameAssembly, const char* name
     exit(1);
 }
 
+// TODO: cache subclasses?
+bool isNpc(WinProcess& proc, const rust::BasePlayer_o& player) {
+    //static auto npcClass = get_class<rust::HumanNPCNew_c>(proc);
+    //auto clazz = player.klass;
+    //return is_super(proc, npcClass, clazz);
+    auto clazz = player.klass;
+    return is_super_by_name<rust::HumanNPCNew_c>(proc, clazz);
+}
+
 
 std::vector<player> getVisiblePlayers(WinProcess& proc) {
-    WinDll* ga = proc.modules.GetModuleInfo("GameAssembly.dll");
+    static WinDll* ga = proc.modules.GetModuleInfo("GameAssembly.dll");
     assert(ga);
 
     auto clazzPtr = get_class<rust::BasePlayer_c>(proc);
@@ -65,7 +74,8 @@ std::vector<player> getVisiblePlayers(WinProcess& proc) {
             continue;
         }
         auto obj = obj_ptr.read(proc);
-        if (obj.playerFlags & (int32_t)player_flags::Sleeping) {
+
+        if (obj.playerFlags & (int32_t)player_flags::Sleeping && !isNpc(proc, obj)) {
             continue;
         }
 
@@ -75,25 +85,25 @@ std::vector<player> getVisiblePlayers(WinProcess& proc) {
 }
 
 pointer<rust::BasePlayer_o> getLocalPlayer(WinProcess& proc) {
-    auto localPlayerClass = get_class<rust::LocalPlayer_c>(proc);
+    static const auto localPlayerClass = get_class<rust::LocalPlayer_c>(proc);
     if (!localPlayerClass) {
         puts("trolled");
-        return pointer<rust::BasePlayer_o>{nullptr};
+        exit(1);
     }
 
     //auto name = getClassName(proc, localPlayerClass.address);
     //std::cout << "local player class = " << name << '\n';
-    auto staticFields = localPlayerClass.member(static_fields)//pointer<pointer<rust::LocalPlayer_StaticFields>>{&localPlayerClass.as_raw()->static_fields}
+    static const auto staticFields = localPlayerClass.member(static_fields)
             .read(proc);
 
     return staticFields.read(proc)._Entity_k__BackingField;
 }
 
-std::pair<float, float> getAngles(WinProcess& proc, pointer<rust::BasePlayer_o> player) {
+glm::vec2 getAngles(WinProcess& proc, pointer<rust::BasePlayer_o> player) {
     pointer input = player.member(input).read(proc);
     // not sure if that's actually the roll
-    auto [yaw, pitch, roll] = input.member(bodyAngles).read(proc);
-    return {yaw, pitch};
+    auto [pitch, yaw, roll] = input.member(bodyAngles).read(proc);
+    return {pitch, yaw};
 }
 
 std::optional<pointer<rust::Item_o>> getHeldItem(WinProcess& proc, pointer<rust::BasePlayer_o> player) {
@@ -107,7 +117,7 @@ std::optional<pointer<rust::Item_o>> getHeldItem(WinProcess& proc, pointer<rust:
 
     for (int i = 0; i < size; i++) {
         pointer ptr = array.read(proc, i);
-        auto item = pointer<rust::Item_o>{ptr.address}; // dumper mistakenly used protobuf Item
+        auto item = ptr.as_unchecked<rust::Item_o>();//pointer<rust::Item_o>{ptr.address}; // dumper mistakenly used protobuf Item
 
         uint32_t uId = item.member(uid).read(proc);
         if (activeId == uId) {
@@ -135,6 +145,5 @@ std::optional<pointer<rust::HeldEntity_o>> getHeldEntity(WinProcess& proc, point
     pointer ref = item->member(heldEntity).read(proc).ent_cached;
     if (!ref) return std::nullopt;
 
-    pointer cast = pointer<rust::HeldEntity_o>{ref.address};
-    return cast;
+    return ref.cast<rust::HeldEntity_o>();
 }

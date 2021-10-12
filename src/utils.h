@@ -52,16 +52,14 @@ inline std::string getClassName(WinProcess& proc, uint64_t address) {
 }
 
 template<typename C>
-inline pointer<C> get_class(WinProcess& proc) {
-    WinDll* const ga = proc.modules.GetModuleInfo("GameAssembly.dll");
-//    assert(ga);
+pointer<C> get_class(WinProcess& proc) {
+    static WinDll* const ga = proc.modules.GetModuleInfo("GameAssembly.dll");
+    assert(ga);
     if (!ga)  {
         return pointer<C>{nullptr};
     }
     auto base = ga->info.baseAddress;
-    if (!base) {
-        return pointer<C>{nullptr};
-    }
+    assert(base);
     auto out = pointer<C>{proc.Read<uint64_t>(base + C::offset)};
 
     /*auto scanned = scan_for_class(proc, *ga, C::name);
@@ -81,7 +79,7 @@ std::vector<player> getVisiblePlayers(WinProcess& proc);
 
 pointer<rust::BasePlayer_o> getLocalPlayer(WinProcess& proc);
 
-std::pair<float, float> getAngles(WinProcess& proc, pointer<rust::BasePlayer_o> player);
+glm::vec2 getAngles(WinProcess& proc, pointer<rust::BasePlayer_o> player);
 
 template<typename List>
 auto getListData(WinProcess& proc, pointer<List> list) {
@@ -113,12 +111,12 @@ inline bool is_super(WinProcess& proc, pointer<rust::Il2CppClass_1> super, point
 }
 
 template<typename S, typename C>
-inline bool is_super(WinProcess& proc, pointer<S> super, pointer<C> clazz) {
+bool is_super(WinProcess& proc, pointer<S> super, pointer<C> clazz) {
     return is_super(proc, super.member(_1), clazz.member(_1));
 }
 
 template<typename S, typename C>
-inline bool is_super_by_name(WinProcess& proc, pointer<C> clazz) {
+bool is_super_by_name(WinProcess& proc, pointer<C> clazz) {
     assert(clazz != nullptr);
     pointer<rust::Il2CppClass> parent = clazz.template unsafe_cast<rust::Il2CppClass>();
     do {

@@ -45,7 +45,7 @@ bool isNpc(WinProcess& proc, const rust::BasePlayer_o& player) {
     //auto clazz = player.klass;
     //return is_super(proc, npcClass, clazz);
     auto clazz = player.klass;
-    return is_super_by_name<rust::HumanNPCNew_c>(proc, clazz);
+    return is_super_by_name<rust::NPCPlayer_c>(proc, clazz);
 }
 
 
@@ -75,7 +75,7 @@ std::vector<player> getVisiblePlayers(WinProcess& proc) {
         }
         auto obj = obj_ptr.read(proc);
 
-        if (obj.playerFlags & (int32_t)player_flags::Sleeping && !isNpc(proc, obj)) {
+        if ((obj.playerFlags & (int32_t)player_flags::Sleeping) || isNpc(proc, obj)) {
             continue;
         }
 

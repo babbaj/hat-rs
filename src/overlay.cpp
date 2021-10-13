@@ -3,6 +3,7 @@
 #include <optional>
 #include <array>
 
+#include "render/renderutil.h"
 #include "utils.h"
 #include "overlay.h"
 #include "font.h"
@@ -16,7 +17,6 @@
 #include <glm/vec2.hpp>
 #include <glm/mat4x4.hpp>
 #include <glm/ext.hpp>
-#include <glm/gtx/perpendicular.hpp>
 
 #include <fmt/core.h>
 
@@ -34,7 +34,6 @@ void flushErrors() {
     while ((err = glGetError()) != GL_NO_ERROR);
 }
 
-GLuint LoadShaders(const char* vertexShaderCode, const char* fragmentShaderCode);
 
 [[deprecated]] glm::mat4 getViewMatrix(WinProcess& rust) {
     constexpr auto gom_offset = 0x17C1F18;
@@ -333,7 +332,24 @@ void main() {
     gl_Position = vec4(pos.x, pos.y, 0.0, 1.0);
 }
 )";
+constexpr const char* tracerGeometryShader =
+        R"(
+#version 330 core
+#extension GL_EXT_geometry_shader : enable
 
+layout (points) in;
+layout (line_strip, max_vertices = 2) out;
+
+void main() {
+    gl_Position = vec4(0, 0, 0, 1);
+    EmitVertex();
+
+    gl_Position = gl_in[0].gl_Position;
+    EmitVertex();
+
+    EndPrimitive();
+}
+)";
 constexpr const char* tracerFragmentShader =
         R"(
 #version 330 core
@@ -345,7 +361,7 @@ void main() {
 }
 )";
 void renderTracers(const std::vector<glm::vec2>& points) {
-    static GLuint programID = LoadShaders(tracerVertexShader, tracerFragmentShader);
+    static GLuint programID = LoadShaders(tracerVertexShader, tracerFragmentShader, tracerGeometryShader);
     flushErrors();
     glUseProgram(programID);
 
@@ -360,7 +376,7 @@ void renderTracers(const std::vector<glm::vec2>& points) {
     glEnableVertexAttribArray(0);
 
     glPointSize(10.0f);
-    glDrawArrays(GL_LINES, 0, points.size());
+    glDrawArrays(GL_POINTS, 0, points.size());
     //printError();
 
     glDeleteVertexArrays(1, &vao);
@@ -529,7 +545,6 @@ void renderOverlay(WinProcess& rust) {
         }
         auto [_, tracer] = worldToScreen(viewMatrix, pos);
         tracerPoints.push_back(tracer);
-        tracerPoints.push_back({});
     }
 
     renderEsp(espBoxes);
@@ -565,11 +580,15 @@ void checkProgramError(GLuint id) {
     }
 }
 
-GLuint LoadShaders(const char* vertexShaderCode, const char* fragmentShaderCode) {
+GLuint LoadShaders(const char* vertexShaderCode, const char* fragmentShaderCode, const char* geometryShaderCode) {
 
     // Create the shaders
     GLuint VertexShaderID = glCreateShader(GL_VERTEX_SHADER);
     GLuint FragmentShaderID = glCreateShader(GL_FRAGMENT_SHADER);
+    GLuint geometryShaderID = 5021;
+    if (geometryShaderCode) {
+        geometryShaderID = glCreateShader(GL_GEOMETRY_SHADER);
+    }
 
     GLint Result = GL_FALSE;
 
@@ -597,12 +616,27 @@ GLuint LoadShaders(const char* vertexShaderCode, const char* fragmentShaderCode)
         checkShaderError(FragmentShaderID);
     }
 
+    if (geometryShaderCode != nullptr) {
+        puts("Compiling geometry shader");
+        glShaderSource(geometryShaderID, 1, &geometryShaderCode, nullptr);
+        glCompileShader(geometryShaderID);
+
+        glGetShaderiv(geometryShaderID, GL_COMPILE_STATUS, &Result);
+        if (!Result) {
+            std::cout << "geometry shader error" << std::endl;
+            checkShaderError(geometryShaderID);
+        }
+    }
+
 
     // Link the program
     printf("Linking program\n");
     GLuint ProgramID = glCreateProgram();
     glAttachShader(ProgramID, VertexShaderID);
     glAttachShader(ProgramID, FragmentShaderID);
+    if (geometryShaderCode) {
+        glAttachShader(ProgramID, geometryShaderID);
+    }
     glLinkProgram(ProgramID);
 
     // Check the program
@@ -614,7 +648,10 @@ GLuint LoadShaders(const char* vertexShaderCode, const char* fragmentShaderCode)
 
     glDetachShader(ProgramID, VertexShaderID);
     glDetachShader(ProgramID, FragmentShaderID);
-
+    if (geometryShaderCode) {
+        glDetachShader(ProgramID, geometryShaderID);
+        glDeleteShader(geometryShaderID);
+    }
     glDeleteShader(VertexShaderID);
     glDeleteShader(FragmentShaderID);
 

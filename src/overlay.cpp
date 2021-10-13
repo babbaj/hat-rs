@@ -112,18 +112,24 @@ glm::mat4 getViewMatrix0(WinProcess& rust) {
 
 
 // returns ndc (-1/1)
-std::optional<glm::vec2> worldToScreen(const glm::mat4& matrix, const glm::vec3& worldPos) {
+std::pair<bool, glm::vec2> worldToScreen(const glm::mat4& matrix, const glm::vec3& worldPos) {
     glm::vec3 transVec{matrix[0][3], matrix[1][3], matrix[2][3]};
     glm::vec3 rightVec{matrix[0][0], matrix[1][0], matrix[2][0]};
     glm::vec3 upVec   {matrix[0][1], matrix[1][1], matrix[2][1]};
 
     float w = glm::dot(transVec, worldPos) + matrix[3][3];
-    if ((w != w) || w < 0.098f) return std::nullopt;
-    float y = glm::dot(upVec, worldPos) + matrix[3][1];
     float x = glm::dot(rightVec, worldPos) + matrix[3][0];
+    float y = glm::dot(upVec, worldPos) + matrix[3][1];
 
-    // this is normally converted to screen space coords
-    return glm::vec2(x / w, y / w);
+    const bool visible = !((w != w) || w < 0.098f);
+    if (!visible) {
+        x *= 2560.0f;
+        y *= 2560.0f;
+        return {false, glm::vec2(x, y)};
+    } else {
+        // this is normally converted to screen space coords
+        return {true, glm::vec2(x / w, y / w)};
+    }
 }
 
 constexpr const char* espVertexShader =
@@ -155,9 +161,6 @@ void main() {
 void renderEsp(const std::vector<std::array<glm::vec2, 4>>& boxes) {
     static GLuint programID = LoadShaders(espVertexShader, espFragmentShader);
     glUseProgram(programID);
-
-    glEnable(GL_BLEND);
-    glBlendFunc(GL_ONE, GL_ZERO);
 
     using type = std::decay_t<decltype(boxes)>::value_type;
     GLuint buffer; // The ID
@@ -259,6 +262,7 @@ void renderText(const Font& font, const std::vector<std::array<float, 7>>& text_
     glBindVertexArray(vao);
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ebo);
     glDrawElements(GL_TRIANGLES, 3 * text_indices.size(), GL_UNSIGNED_INT, nullptr);
+    glDisable(GL_BLEND);
 
     glDeleteVertexArrays(1, &vao);
     glDeleteBuffers(1, &vbo);
@@ -319,6 +323,50 @@ void renderEspText(const std::vector<EspInfo>& sections) {
     renderText(font, text_vertices, text_indices);
 }
 
+constexpr const char* tracerVertexShader =
+        R"(
+#version 330 core
+
+layout(location = 0) in vec2 pos;
+
+void main() {
+    gl_Position = vec4(pos.x, pos.y, 0.0, 1.0);
+}
+)";
+
+constexpr const char* tracerFragmentShader =
+        R"(
+#version 330 core
+
+out vec3 color;
+
+void main() {
+  color = vec3(1,0,0);
+}
+)";
+void renderTracers(const std::vector<glm::vec2>& points) {
+    static GLuint programID = LoadShaders(tracerVertexShader, tracerFragmentShader);
+    flushErrors();
+    glUseProgram(programID);
+
+    GLuint vao, vbo;
+    glGenVertexArrays(1, &vao);
+    glGenBuffers(1, &vbo);
+
+    glBindVertexArray(vao);
+    glBindBuffer(GL_ARRAY_BUFFER, vbo);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(glm::vec2) * points.size(), points.data(), GL_DYNAMIC_DRAW);
+    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 0, nullptr);
+    glEnableVertexAttribArray(0);
+
+    glPointSize(10.0f);
+    glDrawArrays(GL_LINES, 0, points.size());
+    //printError();
+
+    glDeleteVertexArrays(1, &vao);
+    glDeleteBuffers(1, &vbo);
+}
+
 std::pair<glm::vec2, glm::vec2> getEspSides(glm::vec2 from, glm::vec2 target, float width) {
     glm::vec2 v = target - from;
 
@@ -335,8 +383,14 @@ std::pair<glm::vec2, glm::vec2> getEspSides(glm::vec2 from, glm::vec2 target, fl
 }
 
 std::optional<std::array<glm::vec2, 4>> getEspBox(glm::vec3 myPos, glm::vec3 playerPos, glm::mat4 viewMatrix) {
-    auto w2s = [&viewMatrix](glm::vec3 pos) {
-        return worldToScreen(viewMatrix, pos);
+    auto w2s = [&viewMatrix](glm::vec3 pos) -> std::optional<glm::vec2> {
+        auto [visible, screen] = worldToScreen(viewMatrix, pos);
+        if (visible) {
+            return {screen};
+        } else {
+            return std::nullopt;
+        }
+        //return worldToScreen(viewMatrix, pos);
     };
 
     auto [left, right] = getEspSides({myPos.x, myPos.z}, {playerPos.x, playerPos.z}, 1);
@@ -463,18 +517,24 @@ void renderOverlay(WinProcess& rust) {
 
     std::vector<std::array<glm::vec2, 4>> espBoxes;
     std::vector<EspInfo> espText;
+    std::vector<glm::vec2> tracerPoints;
     for (const auto& player : players) {
-        // TODO: filter local player
+        if (player.handle == local.handle) continue;
+
         auto pos = player.position;
         std::optional bpx = getEspBox(headPos, pos, viewMatrix);
         if (bpx) {
             espText.push_back(getEspInfo(*bpx, local, player));
             espBoxes.push_back(*bpx);
         }
+        auto [_, tracer] = worldToScreen(viewMatrix, pos);
+        tracerPoints.push_back(tracer);
+        tracerPoints.push_back({});
     }
 
     renderEsp(espBoxes);
     renderEspText(espText);
+    renderTracers(tracerPoints);
 
     /*renderEsp({
             {glm::vec2{0.0f, 0.0f}, glm::vec2{0.0f, 0.2f}, glm::vec2{0.2f, 0.2f}, glm::vec2{0.2f, 0.0f}},

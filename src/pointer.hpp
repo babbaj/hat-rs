@@ -109,19 +109,19 @@ struct pointer : pointer_base<T> {
     // TODO: implicit conversion operator/constructor for super types
 
     template<typename U> requires equal_comparable<U, T>
-    bool operator==(pointer<U> rhs) {
+    bool operator==(pointer<U> rhs) const {
         return this->address == rhs.address;
     }
 
     template<typename U> requires equal_comparable<U, T>
-    bool operator!=(pointer<U> rhs) {
+    bool operator!=(pointer<U> rhs) const {
         return !(*this == rhs);
     }
 
-    constexpr bool operator==(std::nullptr_t) {
+    constexpr bool operator==(std::nullptr_t) const {
         return this->address == 0;
     }
-    constexpr bool operator!=(std::nullptr_t) {
+    constexpr bool operator!=(std::nullptr_t) const {
         return this->address != 0;
     }
 

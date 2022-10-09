@@ -198,23 +198,36 @@ pid_t getPid() {
 }
 
 #ifdef HACK_EXECUTABLE
-int main() {
+int main(int argc, char** argv) {
     auto ctx = WinContext(getPid());
     ctx.processList.Refresh();
-    auto* rust = findRust(ctx.processList);
+    // this being static is a hack lol
+    static auto* rust = findRust(ctx.processList);
+    if (!rust) {
+        std::cout << "failed to find rust process" << std::endl;
+        return 1;
+    }
+    static std::thread hackThread([] {
+        hack_main(*rust);
+    });
 
-    hack_main(*rust);
+    SnuggleOps ops{
+        .render_overlay = [](EGLDisplay dpy, EGLSurface surface) {
+            renderOverlay(*rust);
+        },
+        .key_down = [](int) {},
+        .key_up = [](int) {}
+    };
+    return snuggle_main(&ops, argc, argv);
 }
 #endif
 
 #ifdef HACK_SHARED_LIBRARY
 #include <dlfcn.h>
-#include <SDL2/SDL_egl.h>
-#include "overlay.h"
-
+#include <chrono>
+#include <fmt/core.h>
 
 void swapBuffersHook() {
-
     static bool initialized = false;
     static WinProcess* rust;
     if (!initialized) {
@@ -233,7 +246,12 @@ void swapBuffersHook() {
             //std::terminate();
         }
     } else {
+        //auto t1 = std::chrono::steady_clock::now();
         renderOverlay(*rust);
+        //auto t2 = std::chrono::steady_clock::now();
+        //auto time = std::chrono::duration_cast<std::chrono::microseconds>(t2 - t1).count();
+        //fmt::print("{}\n", time);
+        //fflush(stdout);
     }
 }
 

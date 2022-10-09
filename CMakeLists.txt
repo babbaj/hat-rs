@@ -27,7 +27,7 @@ pkg_check_modules(SNUGGLEHEIMER REQUIRED IMPORTED_TARGET snuggleheimer)
 file(GLOB_RECURSE HACK_SRC src/*)
 set(SRC ${HACK_SRC} ${VMREAD_SRC})
 
-set(HACK_LIBRARY TRUE)
+#set(HACK_LIBRARY TRUE)
 if (${HACK_LIBRARY})
     add_definitions(-DHACK_SHARED_LIBRARY)
     add_library(rust_hack SHARED ${SRC} src/overlay.cpp src/overlay.h)
@@ -36,7 +36,7 @@ else()
     add_executable(rust_hack ${SRC})
 endif()
 
-target_link_libraries(rust_hack glm::glm PkgConfig::FMT ${SDL2_LIBRARIES} sfml-graphics)
+target_link_libraries(rust_hack GL glm::glm PkgConfig::SNUGGLEHEIMER PkgConfig::FMT ${SDL2_LIBRARIES} sfml-graphics)
 target_include_directories(rust_hack PRIVATE ${SDL2_INCLUDE_DIRS})
 message("uwu ${SDL2_INCLUDE_DIRS}")
 

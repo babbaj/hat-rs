@@ -34,8 +34,8 @@ void flushErrors() {
     while ((err = glGetError()) != GL_NO_ERROR);
 }
 
-
 [[deprecated]] glm::mat4 getViewMatrix(WinProcess& rust) {
+    //48 8B CF E8 ?? ?? ?? ?? 84 C0 74 4C 48 8B 15 ?? ?? ?? ?? 66 39 77 54 75 04 48 83 C2 10 48 3B DA
     constexpr auto gom_offset = 0x17C1F18;
     WinDll* const unity = rust.modules.GetModuleInfo("UnityPlayer.dll");
     auto gom = rust.Read<uint64_t>(unity->info.baseAddress + gom_offset);
@@ -83,6 +83,7 @@ glm::mat4 getViewMatrix(glm::vec3 pos, float pitch, float yaw, float fov) {
 glm::mat4 getViewMatrix0(WinProcess& rust) {
     static constexpr uint64_t gom_offset = 0x17C1F18; // TODO pattern finder
     static const uint64_t unity_player = rust.modules.GetModuleInfo("UnityPlayer.dll")->info.baseAddress;
+    assert(unity_player);
 
     static uintptr_t camera = 0; // TODO: I think this changes when joining a new server
     if (!camera) {
@@ -108,7 +109,51 @@ glm::mat4 getViewMatrix0(WinProcess& rust) {
         return {};
     }
 }
+glm::mat4 getViewMatrix1(WinProcess& rust) {
+    static constexpr uint64_t gom_offset = 0x1762E80; // TODO pattern finder
+    static const uint64_t unity_player = rust.modules.GetModuleInfo("UnityPlayer.dll")->info.baseAddress;
+    assert(unity_player);
 
+    static uintptr_t camera = 0; // TODO: I think this changes when joining a new server
+    if (!camera) {
+        auto camera_manager_ptr = rust.Read<uintptr_t>(unity_player + gom_offset);
+        assert(camera_manager_ptr);
+        if (!camera_manager_ptr) return {};
+        auto camera_manager = rust.Read<uintptr_t>(camera_manager_ptr);
+        assert(camera_manager);
+        if (!camera_manager) return {};
+        auto camera_ptr = rust.Read<uintptr_t>(camera_manager);
+        assert(camera_ptr);
+        if (!camera_ptr) return {};
+        auto camera_object = rust.Read<uintptr_t>(camera + 0x30);
+        assert(camera_object);
+        if (!camera_object) return {};
+        auto object_class = rust.Read<uintptr_t>(camera_object + 0x30);
+        assert(object_class);
+        if (!object_class) return {};
+        auto entity = rust.Read<uintptr_t>(object_class + 0x18);
+        assert(entity);
+        if (!entity) return {};
+
+        camera = entity + 0x2E4;
+    }
+
+    if (camera) {
+        return rust.Read<glm::mat4>(camera);
+    } else {
+        return {};
+    }
+}
+
+
+glm::vec2 ndcToScreen(glm::vec2 ndc) {
+    constexpr float w = 2560.0f;
+    constexpr float h = 1440.0f;
+
+    const float x = ((w / 2.0f) * ndc.x) + (w / 2.0f);
+    const float y = (h / 2.0f) - ((h / 2.0f) * ndc.y);
+    return {x, y};
+}
 
 // returns ndc (-1/1)
 std::pair<bool, glm::vec2> worldToScreen(const glm::mat4& matrix, const glm::vec3& worldPos) {
@@ -122,6 +167,7 @@ std::pair<bool, glm::vec2> worldToScreen(const glm::mat4& matrix, const glm::vec
 
     const bool visible = !((w != w) || w < 0.098f);
     if (!visible) {
+        // troll hack for tracers
         x *= 2560.0f;
         y *= 2560.0f;
         return {false, glm::vec2(x, y)};
@@ -130,6 +176,7 @@ std::pair<bool, glm::vec2> worldToScreen(const glm::mat4& matrix, const glm::vec
         return {true, glm::vec2(x / w, y / w)};
     }
 }
+
 
 constexpr const char* espVertexShader =
 R"(
@@ -375,9 +422,8 @@ void renderTracers(const std::vector<glm::vec2>& points) {
     glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 0, nullptr);
     glEnableVertexAttribArray(0);
 
-    glPointSize(10.0f);
+    //glPointSize(10.0f);
     glDrawArrays(GL_POINTS, 0, points.size());
-    //printError();
 
     glDeleteVertexArrays(1, &vao);
     glDeleteBuffers(1, &vbo);
@@ -406,16 +452,14 @@ std::optional<std::array<glm::vec2, 4>> getEspBox(glm::vec3 myPos, glm::vec3 pla
         } else {
             return std::nullopt;
         }
-        //return worldToScreen(viewMatrix, pos);
     };
 
     auto [left, right] = getEspSides({myPos.x, myPos.z}, {playerPos.x, playerPos.z}, 1);
 
-    // TODO: this can be optimized by w2s for 2 corners and then filling in the other 2
     auto topL = w2s({left.x, playerPos.y + 1.8, left.y});
+    auto bottomR = w2s({right.x, playerPos.y, right.y});
     auto topR = w2s({right.x, playerPos.y + 1.8, right.y});
     auto bottomL = w2s({left.x, playerPos.y, left.y});
-    auto bottomR = w2s({right.x, playerPos.y, right.y});
 
     if (!topL || !topR || !bottomL || !bottomR) return std::nullopt;
 
@@ -429,13 +473,7 @@ std::optional<std::array<glm::vec2, 4>> getEspBox(glm::vec3 myPos, glm::vec3 pla
 
 
 EspInfo getEspInfo(const std::array<glm::vec2, 4>& box, const player& local, const player& player) {
-    const float w = 2560.0f;
-    const float h = 1440.0f;
-
-    const float ndcX = box[0].x;
-    const float ndcY = box[0].y;
-    const float x = ((w / 2.0f) * ndcX) + (w / 2.0f);
-    const float y = (h / 2.0f) - ((h / 2.0f) * ndcY);
+    const glm::vec2 screenPos = ndcToScreen(box[0]);
 
     EspString name = {
         .r = 1.0f, .g = 0.0f, .b = 0.0f,
@@ -465,8 +503,8 @@ EspInfo getEspInfo(const std::array<glm::vec2, 4>& box, const player& local, con
     }
 
     return {
-        .x = x,
-        .y = y,
+        .x = screenPos.x,
+        .y = screenPos.y,
         .lines = std::move(lines)
     };
 }
@@ -528,8 +566,8 @@ void renderOverlay(WinProcess& rust) {
     const player local = player{rust, localPtr};
     const glm::vec3 headPos = glm::vec3(local.position.x, local.position.y + 1.6f, local.position.z); // TODO: get head bone position
     // ConVar_Graphics_StaticFields::_fov
-    //glm::mat4 viewMatrix = getViewMatrix(headPos, local.angles.x, local.angles.y, 90.0f);
-    glm::mat4 viewMatrix = getViewMatrix0(rust);
+    glm::mat4 viewMatrix = getViewMatrix(headPos, local.angles.x, local.angles.y, 90.0f);
+    //glm::mat4 viewMatrix = getViewMatrix1(rust);
 
     std::vector<std::array<glm::vec2, 4>> espBoxes;
     std::vector<EspInfo> espText;
@@ -543,8 +581,10 @@ void renderOverlay(WinProcess& rust) {
             espText.push_back(getEspInfo(*bpx, local, player));
             espBoxes.push_back(*bpx);
         }
-        auto [_, tracer] = worldToScreen(viewMatrix, pos);
-        tracerPoints.push_back(tracer);
+        auto [visible, tracer] = worldToScreen(viewMatrix, pos);
+        if (!visible) {
+            tracerPoints.push_back(tracer);
+        }
     }
 
     renderEsp(espBoxes);
@@ -580,8 +620,9 @@ void checkProgramError(GLuint id) {
     }
 }
 
-GLuint LoadShaders(const char* vertexShaderCode, const char* fragmentShaderCode, const char* geometryShaderCode) {
 
+
+GLuint LoadShaders(const char* vertexShaderCode, const char* fragmentShaderCode, const char* geometryShaderCode) {
     // Create the shaders
     GLuint VertexShaderID = glCreateShader(GL_VERTEX_SHADER);
     GLuint FragmentShaderID = glCreateShader(GL_FRAGMENT_SHADER);

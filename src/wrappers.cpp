@@ -21,6 +21,8 @@ player::player(WinProcess& proc, pointer<rust::BasePlayer_o> handle_, const rust
             this->weaponName = std::move(name);
         }*/
         auto itemName = def.member(shortname).read(proc);
-        this->weaponName = readString8(proc, itemName);
+        if (itemName) {
+            this->weaponName = readString8(proc, itemName);
+        }
     }
 }

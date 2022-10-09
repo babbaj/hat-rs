@@ -6,6 +6,10 @@
 
 #include "radar.h"
 #include "utils.h"
+#include "overlay.h"
+
+#include <SDL2/SDL_egl.h>
+#include <snuggleheimer.h>
 
 void debug(WinProcess& proc) {
     auto baseNetworkable = get_class<rust::BaseNetworkable_c>(proc);
@@ -168,6 +172,7 @@ void hack_main(WinProcess& rust) {
                     fastBow(rust, local);
                     melee(rust, local);
                     instantEoka(rust, local);
+                    //enableAdmin(rust, local);
                     //auto grav = getGravityPtr(rust, local);
                     //grav.write(rust, 0.1);
 

@@ -22,6 +22,7 @@ find_package(SDL2 REQUIRED)
 find_package(glm REQUIRED)
 find_package(SFML 2.5 COMPONENTS graphics REQUIRED)
 pkg_check_modules(FMT REQUIRED IMPORTED_TARGET fmt)
+pkg_check_modules(SNUGGLEHEIMER REQUIRED IMPORTED_TARGET snuggleheimer)
 
 file(GLOB_RECURSE HACK_SRC src/*)
 set(SRC ${HACK_SRC} ${VMREAD_SRC})
@@ -37,6 +38,7 @@ endif()
 
 target_link_libraries(rust_hack glm::glm PkgConfig::FMT ${SDL2_LIBRARIES} sfml-graphics)
 target_include_directories(rust_hack PRIVATE ${SDL2_INCLUDE_DIRS})
+message("uwu ${SDL2_INCLUDE_DIRS}")
 
 target_include_directories(rust_hack PRIVATE pointer/)
 

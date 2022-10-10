@@ -130,6 +130,15 @@ void instantEoka(WinProcess& proc, pointer<rust::BasePlayer_o> player) {
     setNoRecoil(proc, eoka->member(strikeRecoil).read(proc));
 }
 
+void enableAdmin(WinProcess& proc, pointer<rust::BasePlayer_o> player) {
+    auto flags = player.member(playerFlags).read(proc);
+    constexpr auto admin = static_cast<int32_t>(player_flags::IsAdmin);
+    if (!(flags & admin)) {
+        auto newFlags = flags | admin;
+        player.member(playerFlags).write(proc, newFlags);
+    }
+}
+
 void hack_main(WinProcess& rust) {
     static_assert(alignof(rust::HeldEntity_o) == 8);
     puts("rust hack :DD");
@@ -138,7 +147,7 @@ void hack_main(WinProcess& rust) {
         while (true) {
             auto test = getLocalPlayer(rust);
             if (test) {
-                debug(rust);
+                //debug(rust);
                 auto namePtr = test.member(_displayName).read(rust);
                 std::string name = readString8(rust, namePtr);
                 std::cout << "Local player name = " << name << '\n';
@@ -151,10 +160,10 @@ void hack_main(WinProcess& rust) {
                 auto players = getVisiblePlayers(rust);
                 std::cout << players.size() << " players\n";
 
-                std::thread radarThread([&] {
+                std::jthread radarThread([&] {
                     runRadar(rust);
                 });
-                std::thread fatBulletThread([&] {
+                /*std::thread fatBulletThread([&] {
                     while (true) {
                         auto player = getLocalPlayer(rust);
                         fatBullets(rust, player);
@@ -162,7 +171,7 @@ void hack_main(WinProcess& rust) {
                         using namespace std::literals::chrono_literals;
                         std::this_thread::sleep_for(1ms);
                     }
-                });
+                });*/
                 while (true) {
                     auto local = getLocalPlayer(rust);
 
@@ -212,7 +221,7 @@ int main(int argc, char** argv) {
         std::cout << "failed to find rust process" << std::endl;
         return 1;
     }
-    static std::thread hackThread([] {
+    std::jthread hackThread([] {
         hack_main(*rust);
     });
 

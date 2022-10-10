@@ -110,39 +110,11 @@ glm::mat4 getViewMatrix0(WinProcess& rust) {
     }
 }
 glm::mat4 getViewMatrix1(WinProcess& rust) {
-    static constexpr uint64_t gom_offset = 0x1762E80; // TODO pattern finder
-    static const uint64_t unity_player = rust.modules.GetModuleInfo("UnityPlayer.dll")->info.baseAddress;
-    assert(unity_player);
+    static const auto camera_list = getUnityCamera(rust);
+    auto camera_table = pointer<uint64_t>{camera_list}.read(rust);
+    auto cam = pointer<uint64_t>{camera_table}.read(rust);
 
-    static uintptr_t camera = 0; // TODO: I think this changes when joining a new server
-    if (!camera) {
-        auto camera_manager_ptr = rust.Read<uintptr_t>(unity_player + gom_offset);
-        assert(camera_manager_ptr);
-        if (!camera_manager_ptr) return {};
-        auto camera_manager = rust.Read<uintptr_t>(camera_manager_ptr);
-        assert(camera_manager);
-        if (!camera_manager) return {};
-        auto camera_ptr = rust.Read<uintptr_t>(camera_manager);
-        assert(camera_ptr);
-        if (!camera_ptr) return {};
-        auto camera_object = rust.Read<uintptr_t>(camera + 0x30);
-        assert(camera_object);
-        if (!camera_object) return {};
-        auto object_class = rust.Read<uintptr_t>(camera_object + 0x30);
-        assert(object_class);
-        if (!object_class) return {};
-        auto entity = rust.Read<uintptr_t>(object_class + 0x18);
-        assert(entity);
-        if (!entity) return {};
-
-        camera = entity + 0x2E4;
-    }
-
-    if (camera) {
-        return rust.Read<glm::mat4>(camera);
-    } else {
-        return {};
-    }
+    return pointer<glm::mat4>{cam + 0x2E4}.read(rust);
 }
 
 
@@ -566,8 +538,8 @@ void renderOverlay(WinProcess& rust) {
     const player local = player{rust, localPtr};
     const glm::vec3 headPos = glm::vec3(local.position.x, local.position.y + 1.6f, local.position.z); // TODO: get head bone position
     // ConVar_Graphics_StaticFields::_fov
-    glm::mat4 viewMatrix = getViewMatrix(headPos, local.angles.x, local.angles.y, 90.0f);
-    //glm::mat4 viewMatrix = getViewMatrix1(rust);
+    //glm::mat4 viewMatrix = getViewMatrix(headPos, local.angles.x, local.angles.y, 90.0f);
+    glm::mat4 viewMatrix = getViewMatrix1(rust);
 
     std::vector<std::array<glm::vec2, 4>> espBoxes;
     std::vector<EspInfo> espText;

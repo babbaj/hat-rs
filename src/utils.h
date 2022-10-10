@@ -8,6 +8,8 @@
 #include "csutils.h"
 #include "wrappers.h"
 
+uint64_t getUnityCamera(WinProcess&);
+
 inline void printModules(WinProcess& process) {
     PEB peb = process.GetPeb();
     short magic = process.Read<short>(peb.ImageBaseAddress);

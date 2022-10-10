@@ -1,10 +1,13 @@
 #include <iostream>
 #include <cstdio>
 #include <cassert>
+#include <vector>
+#include <algorithm>
 
 #include "../vmread/hlapi/hlapi.h"
 
 #include "utils.h"
+#include "windoze.h"
 
 
 uint64_t scan_for_class(WinProcess& proc, WinDll& gameAssembly, const char* name)
@@ -146,4 +149,50 @@ std::optional<pointer<rust::HeldEntity_o>> getHeldEntity(WinProcess& proc, point
     if (!ref) return std::nullopt;
 
     return ref.cast<rust::HeldEntity_o>();
+}
+
+// https://github.com/furryhater2008/pm_fix/blob/937ac5b0b2247d99b4c6e7520a05696e85c17a83/plusminus/stuff/il2cpp.h#L457
+uint64_t getUnityCamera(WinProcess& proc) {
+    static const uint64_t base = proc.modules.GetModuleInfo("UnityPlayer.dll")->info.baseAddress;
+    assert(base);
+    const auto dos_header = pointer<win::IMAGE_DOS_HEADER>{base}.read(proc);
+    const auto nt_header = pointer<win::IMAGE_NT_HEADERS64>{base + dos_header.e_lfanew}.read(proc);
+    uint64_t data_base;
+    uint64_t data_size;
+    for (int i = 0;;) {
+        const auto section_header = pointer<win::IMAGE_SECTION_HEADER>{
+                base + dos_header.e_lfanew + // nt_header base
+                sizeof(win::IMAGE_NT_HEADERS64) +  // start of section headers
+                (i * sizeof(win::IMAGE_SECTION_HEADER))
+        }.read(proc); // section header at our index
+        std::string name = section_header.Name;
+        if (strcmp((char *) section_header.Name, ".data") == 0) {
+            data_base = section_header.VirtualAddress + base;
+            data_size = section_header.SizeOfRawData;
+            break;
+        }
+        i++;
+        if (i >= nt_header.FileHeader.NumberOfSections) {
+            puts("failed to find .data");
+            exit(1);
+        }
+    }
+    std::vector<std::byte> section_data(data_size);
+    proc.Read(data_base, section_data.data(), data_size);
+    const auto needle = "AllCameras";
+    const auto camera_string = std::search(section_data.data(), section_data.data() + section_data.size(),
+                                           (std::byte *) needle, (std::byte *) needle + strlen(needle));
+    if (camera_string == section_data.data() + section_data.size()) {
+        puts("failed to find camera string");
+        exit(1);
+    }
+    for (auto walker = (uint64_t *) camera_string; (uint64_t) walker > 0; walker -= 1) {
+        // this loks pretty goofy
+        if (*walker > 0x100000 && *walker < 0xF00000000000000) {
+            // [[[[unityplayer.dll + ctable offset]]] + 0x30] = Camera
+            return *walker;
+        }
+    }
+    puts("failed to find cameras");
+    exit(1);
 }

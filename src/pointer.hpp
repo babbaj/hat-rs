@@ -125,6 +125,12 @@ struct pointer : pointer_base<T> {
         return this->address != 0;
     }
 
+    pointer<T>& operator=(const pointer<T>&) = default;
+    pointer<T>& operator=(std::nullptr_t) {
+        this->address = 0;
+        return *this;
+    };
+
     template<typename Fn>
     auto memberImpl(Fn f) const {
         auto mem = f(*this);

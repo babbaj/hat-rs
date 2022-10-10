@@ -74,6 +74,12 @@ void setNoRecoil(WinProcess& proc, pointer<rust::RecoilProperties_o> recoilPtr) 
     recoil.recoilYawMax   = 0.f;
     recoil.recoilPitchMin = 0.f;
     recoil.recoilPitchMax = 0.f;
+    // new recoil system
+    recoil.useCurves = false;
+    recoil.maxRecoilRadius = 0.f;
+    recoil.aimconeCurveScale = 0.f;
+    recoil.newRecoilOverride = nullptr;
+    recoil.movementPenalty = 0.0f;
     recoilPtr.write(proc, recoil);
 }
 
@@ -163,7 +169,7 @@ void hack_main(WinProcess& rust) {
                 std::jthread radarThread([&] {
                     runRadar(rust);
                 });
-                /*std::thread fatBulletThread([&] {
+                std::thread fatBulletThread([&] {
                     while (true) {
                         auto player = getLocalPlayer(rust);
                         fatBullets(rust, player);
@@ -171,7 +177,7 @@ void hack_main(WinProcess& rust) {
                         using namespace std::literals::chrono_literals;
                         std::this_thread::sleep_for(1ms);
                     }
-                });*/
+                });
                 while (true) {
                     auto local = getLocalPlayer(rust);
 

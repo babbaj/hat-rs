@@ -85,12 +85,10 @@ glm::vec2 getAngles(WinProcess& proc, pointer<rust::BasePlayer_o> player);
 
 template<typename List>
 auto getListData(WinProcess& proc, pointer<List> list) {
-    using T = typename std::decay_t<decltype(std::declval<List>()._items.read(proc).m_Items[0])>::type;
-
     List l = list.read(proc);
     const auto size = l._size;
     pointer itemsPtr = l._items;
-    pointer<pointer<T>> arrayPtr = itemsPtr.member(m_Items).decay();
+    auto arrayPtr = itemsPtr.member(m_Items).decay();
 
     return std::pair{size, arrayPtr};
 }

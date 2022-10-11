@@ -188,8 +188,9 @@ void hack_main(WinProcess& rust) {
                     melee(rust, local);
                     instantEoka(rust, local);
                     //enableAdmin(rust, local);
-                    //auto grav = getGravityPtr(rust, local);
-                    //grav.write(rust, 0.1);
+                    auto grav = getGravityPtr(rust, local);
+                    // default is 2.5
+                    //grav.write(rust, 2.0);
 
                     using namespace std::literals::chrono_literals;
                     std::this_thread::sleep_for(10ms);

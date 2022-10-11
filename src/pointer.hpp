@@ -19,14 +19,15 @@ inline std::ptrdiff_t offset_of(T Owner::*member) {
 }
 
 template<typename T, typename Owner>
-constexpr T member_type_fn(T Owner::*);
+std::type_identity<T> member_type_fn(T Owner::*);
 
 template<typename M>
-using member_type = decltype(member_type_fn(std::declval<M>()));
+using member_type = typename decltype(member_type_fn(std::declval<M>()))::type;
 
 template<typename T, typename U>
 concept equal_comparable = std::is_convertible_v<T, U> || std::is_convertible_v<U, T>;
 
+// true if 2 types have the same memory footprint
 template<typename T, typename U>
 constexpr bool similar = sizeof(T) == sizeof(U) && alignof(T) == alignof(U);
 template<typename T, typename U> requires (std::same_as<T, void> || std::same_as<U, void>)
@@ -51,12 +52,18 @@ struct pointer_base {
     }
 
     template<typename U> requires similar<T, U>
-    pointer<U> as() {
+    pointer<U> bit_cast() {
         return pointer<U>{this->address};
     }
 
     template<typename U>
-    pointer<U> as_unchecked() {
+    pointer<U> unsafe_cast() {
+        return pointer<U>{this->address};
+    }
+
+    template<typename U>
+    pointer<U> cast() const {
+        static_assert(std::is_base_of_v<U, T> || std::is_base_of_v<T, U>);
         return pointer<U>{this->address};
     }
 
@@ -94,17 +101,6 @@ struct pointer : pointer_base<T> {
         nullCheck();
         proc.Write(this->address, array.data(), sizeof(T) * array.size());
     }*/
-
-    template<typename U>
-    pointer<U> cast() const {
-        static_assert(std::is_base_of_v<U, T> || std::is_base_of_v<T, U>);
-        return pointer<U>{this->address};
-    }
-
-    template<typename U>
-    pointer<U> unsafe_cast() const {
-        return pointer<U>{this->address};
-    }
 
     // TODO: implicit conversion operator/constructor for super types
 
@@ -157,6 +153,14 @@ struct pointer<T[N]> : pointer_base<T[N]> {
     void write(WinProcess& proc, const T& value, size_t idx) {
         assert(this->address);
         proc.Write(this->address + (idx * sizeof(T)), value);
+    }
+
+    pointer<T> decay() {
+        return pointer<T>{this->address};
+    }
+
+    pointer<T> index(size_t idx) {
+        return pointer<T>{this->address + sizeof(T) * idx};
     }
 };
 

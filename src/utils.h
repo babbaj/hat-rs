@@ -90,9 +90,9 @@ auto getListData(WinProcess& proc, pointer<List> list) {
     List l = list.read(proc);
     const auto size = l._size;
     pointer itemsPtr = l._items;
-    auto arrayPtr = pointer<pointer<T>>{(uint64_t)&itemsPtr.as_raw()->m_Items[0]};
+    pointer<pointer<T>> arrayPtr = itemsPtr.member(m_Items).decay();
 
-    return std::pair<int32_t, pointer<pointer<T>>>{size, arrayPtr};
+    return std::pair{size, arrayPtr};
 }
 
 template<typename List>
@@ -159,6 +159,6 @@ inline std::optional<pointer<rust::BaseProjectile_o>> getHeldWeapon(WinProcess& 
 }
 
 inline pointer<rust::PlayerWalkMovement_o> getPlayerMovement(WinProcess& proc, pointer<rust::BasePlayer_o> player) {
-    return pointer<rust::PlayerWalkMovement_o>{player.member(movement).read(proc).address};
+    return player.member(movement).read(proc).cast<rust::PlayerWalkMovement_o>();
 }
 

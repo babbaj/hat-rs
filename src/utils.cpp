@@ -67,11 +67,11 @@ std::vector<player> getVisiblePlayers(WinProcess& proc) {
             fields.visiblePlayerList.read(proc) // BasePlayer_StaticFields
                     .vals.read(proc); // ListDictionary_ulong__BasePlayer__o
 
-    auto array = pointer<pointer<rust::BasePlayer_o>>{(uintptr_t)&playerList.buffer.as_raw()->m_Items[0]};
+    auto array = playerList.buffer.member(m_Items).unsafe_cast<pointer<rust::BasePlayer_o>>();
     const auto obj_count = playerList.count;
     std::vector<player> out; out.reserve(obj_count);
     for (int i = 0; i < obj_count; i++) {
-        pointer<rust::BasePlayer_o> obj_ptr = array.read(proc, i);
+        pointer<rust::BasePlayer_o> obj_ptr = array.index(i).read(proc);
         if (!obj_ptr.address) {
             //puts("!obj");
             continue;
@@ -120,7 +120,7 @@ std::optional<pointer<rust::Item_o>> getHeldItem(WinProcess& proc, pointer<rust:
 
     for (int i = 0; i < size; i++) {
         pointer ptr = array.read(proc, i);
-        auto item = ptr.as_unchecked<rust::Item_o>();//pointer<rust::Item_o>{ptr.address}; // dumper mistakenly used protobuf Item
+        auto item = ptr.unsafe_cast<rust::Item_o>(); // dumper mistakenly used protobuf Item
 
         uint32_t uId = item.member(uid).read(proc);
         if (activeId == uId) {

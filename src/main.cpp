@@ -7,6 +7,7 @@
 #include "radar.h"
 #include "utils.h"
 #include "overlay.h"
+#include "hat.h"
 
 #include <SDL2/SDL_egl.h>
 #include <snuggleheimer.h>
@@ -134,6 +135,7 @@ void instantEoka(WinProcess& proc, pointer<rust::BasePlayer_o> player) {
     if (!eoka) return;
     eoka->member(successFraction).write(proc, 1.f);
     setNoRecoil(proc, eoka->member(strikeRecoil).read(proc));
+    eoka->member(_didSparkThisFrame).write(proc, true);
 }
 
 void enableAdmin(WinProcess& proc, pointer<rust::BasePlayer_o> player) {
@@ -166,36 +168,6 @@ void hack_main(WinProcess& rust) {
                 auto players = getVisiblePlayers(rust);
                 std::cout << players.size() << " players\n";
 
-                std::jthread radarThread([&] {
-                    runRadar(rust);
-                });
-                std::thread fatBulletThread([&] {
-                    while (true) {
-                        auto player = getLocalPlayer(rust);
-                        fatBullets(rust, player);
-
-                        using namespace std::literals::chrono_literals;
-                        std::this_thread::sleep_for(1ms);
-                    }
-                });
-                while (true) {
-                    auto local = getLocalPlayer(rust);
-
-                    doSpider(rust, local);
-                    fullbright(rust);
-                    antiRecoil(rust, local);
-                    fastBow(rust, local);
-                    melee(rust, local);
-                    instantEoka(rust, local);
-                    //enableAdmin(rust, local);
-                    auto grav = getGravityPtr(rust, local);
-                    // default is 2.5
-                    //grav.write(rust, 2.0);
-
-                    using namespace std::literals::chrono_literals;
-                    std::this_thread::sleep_for(10ms);
-                }
-                radarThread.join();
                 //fatBulletThread.join();
                 continue;
             }
@@ -203,10 +175,58 @@ void hack_main(WinProcess& rust) {
             using namespace std::literals::chrono_literals;
             std::this_thread::sleep_for(1000ms);
         }
-
     } catch (VMException& ex) {
         printf("Initialization error: %d\n", ex.value);
     }
+}
+
+void mainLoop(Hat& hat, WinProcess& rust) {
+    auto local = getLocalPlayer(rust);
+
+    doSpider(rust, local);
+    fullbright(rust);
+    antiRecoil(rust, local);
+    fastBow(rust, local);
+    melee(rust, local);
+    instantEoka(rust, local);
+    //enableAdmin(rust, local);
+    auto grav = getGravityPtr(rust, local);
+    // default is 2.5
+    //grav.write(rust, 2.0);
+    pointer movement = getPlayerMovement(rust, local);
+    if (hat.keyDown[KEY_L]) {
+        movement.member(wasFalling).write(rust, true);
+        movement.member(previousVelocity).write(rust, {0, -20, 0});
+        movement.member(groundTime).write(rust, 0.f);
+    }
+    if (hat.keyDown[KEY_Z]) {
+        constexpr auto speed = 0.5f;
+        movement.member(groundAngle).write(rust, speed);
+        movement.member(groundAngleNew).write(rust, speed);
+        movement.member(gravityMultiplier).write(rust, speed);
+    } else {
+        movement.member(gravityMultiplier).write(rust, 2.5f);
+    }
+
+    //pointer eyes = local.member(eyes).read(rust);
+    //eyes.member(viewOffset).write(rust, {0, 2.0f, 0});
+
+    using namespace std::literals::chrono_literals;
+    std::this_thread::sleep_for(10ms);
+}
+
+void Hat::onEvent(KeyDownEvent& event) {
+    if (event.sc == KEY_L) {
+        auto player = getLocalPlayer(*proc);
+        pointer movement = getPlayerMovement(*proc, player);
+        movement.member(wasFalling).write(*proc, true);
+        movement.member(previousVelocity).write(*proc, {0, -20, 0});
+        movement.member(groundTime).write(*proc, 0.f);
+    }
+}
+
+void Hat::onEvent(KeyUpEvent& event) {
+
 }
 
 pid_t getPid() {
@@ -223,23 +243,55 @@ int main(int argc, char** argv) {
     auto ctx = WinContext(getPid());
     ctx.processList.Refresh();
     // this being static is a hack lol
-    static auto* rust = findRust(ctx.processList);
-    if (!rust) {
-        std::cout << "failed to find rust process" << std::endl;
-        return 1;
+    static WinProcess* rust;
+    try {
+        rust = findRust(ctx.processList);
+        if (!rust) {
+            std::cout << "failed to find rust process" << std::endl;
+            return 1;
+        }
+    } catch (VMException& ex) {
+        printf("Initialization error: %d\n", ex.value);
+        return ex.value;
     }
-    std::jthread hackThread([] {
-        hack_main(*rust);
+    static Hat hat{rust};
+    //hat.proc = rust;
+
+    std::jthread loopThread([] {
+        while (true) {
+            mainLoop(hat, *rust);
+        }
+    });
+    std::jthread radarThread([] {
+        runRadar(*rust);
+    });
+    std::jthread fatBulletThread([] {
+        while (true) {
+            auto player = getLocalPlayer(*rust);
+            fatBullets(*rust, player);
+
+            using namespace std::literals::chrono_literals;
+            std::this_thread::sleep_for(1ms);
+        }
     });
 
     SnuggleOps ops{
         .render_overlay = [](EGLDisplay dpy, EGLSurface surface) {
             renderOverlay(*rust);
         },
-        .key_down = [](int) {},
-        .key_up = [](int) {}
+        .key_down = [](int sc) {
+            hat.keyDown[sc] = true;
+            auto event = KeyDownEvent{sc};
+            hat.events.Post(event);
+        },
+        .key_up = [](int sc) {
+            hat.keyDown[sc] = false;
+            auto event = KeyUpEvent{sc};
+            hat.events.Post(event);
+        }
     };
-    return snuggle_main(&ops, argc, argv);
+    // too lazy to make threads properly exit on their own
+    exit(snuggle_main(&ops, argc, argv));
 }
 #endif
 
